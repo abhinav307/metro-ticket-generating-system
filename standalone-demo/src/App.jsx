@@ -169,7 +169,7 @@ export default function App() {
             <strong>Metro Ticket Generating System (MTTS)</strong> &bull; Scoped Application <code>x_mtts</code>
           </div>
           <div>
-            Full-Stack Web App &bull; Render Web Service + PostgreSQL Persistent Storage
+            Full-Stack Web App &bull; Render Web Service + MongoDB Atlas Persistent Storage
           </div>
           <div>
             Repository: <a href="https://github.com/abhinav307/metro-ticket-generating-system" target="_blank" rel="noreferrer" style={{ color: '#38bdf8', textDecoration: 'none' }}>abhinav307/metro-ticket-generating-system</a>

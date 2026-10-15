@@ -11,12 +11,12 @@ export default function Header({ activeTab, setActiveTab, bookingsCount, backend
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', width: '100%' }}>
           <span className="demo-pill">Simulated Environment</span>
           <span style={{ flex: 1 }}>
-            <strong>ServiceNow MTTS Full-Stack Demo</strong> — Scoped Application <code>x_mtts</code> emulation powered by Node.js/Express REST APIs &amp; PostgreSQL persistence. No live ServiceNow development instance is connected.
+            <strong>ServiceNow MTTS Full-Stack Demo</strong> — Scoped Application <code>x_mtts</code> emulation powered by Node.js/Express REST APIs &amp; MongoDB persistence. No live ServiceNow development instance is connected.
           </span>
           {isBackendHealthy && (
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '0.75rem', color: '#4ade80', whiteSpace: 'nowrap' }}>
               <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#22c55e', display: 'inline-block' }}></span>
-              REST API &amp; {backendStatus.database?.engine?.includes('embedded') ? 'Embedded PostgreSQL' : 'PostgreSQL'} Active
+              REST API &amp; {backendStatus.database?.engine?.includes('atlas') ? 'MongoDB Atlas' : 'MongoDB'} Active
             </span>
           )}
         </div>

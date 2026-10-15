@@ -1,152 +1,162 @@
-import { query } from './index.js';
+import { getCollection, initDb } from './index.js';
 
 export async function seedDatabase() {
-  console.log('[DB Seed] Checking master data tables...');
+  console.log('[DB Seed] Checking master data collections in MongoDB...');
 
-  // Check if stations are already populated
-  const stnCheck = await query('SELECT COUNT(*) as count FROM stations');
-  const count = parseInt(stnCheck.rows[0].count, 10);
+  const stationsCol = getCollection('stations');
+  const count = await stationsCol.countDocuments({});
 
   if (count > 0) {
     console.log(`[DB Seed] Database already contains ${count} stations. Skipping master data seed.`);
     return;
   }
 
-  console.log('[DB Seed] Seeding transit master data (Scope: x_mtts)...');
+  console.log('[DB Seed] Seeding transit master data into MongoDB collections (Scope: x_mtts)...');
 
   // 1. Seed Stations (Mirrors x_mtts_station)
   const stations = [
-    { code: 'STN-01', name: 'Central Terminus', line: 'Blue Line', zone: 'Zone 1', color: '#0284c7', order: 1, transfer: false },
-    { code: 'STN-02', name: 'Market Square', line: 'Blue Line', zone: 'Zone 1', color: '#0284c7', order: 2, transfer: false },
-    { code: 'STN-03', name: 'Tech Park North', line: 'Blue Line', zone: 'Zone 2', color: '#0284c7', order: 3, transfer: false },
-    { code: 'STN-04', name: 'Financial District', line: 'Blue Line', zone: 'Zone 2', color: '#0284c7', order: 4, transfer: false },
-    { code: 'STN-05', name: 'Airport Junction', line: 'Blue Line', zone: 'Zone 3', color: '#0284c7', order: 5, transfer: false },
-    { code: 'STN-06', name: 'West University', line: 'Red Line', zone: 'Zone 1', color: '#e11d48', order: 1, transfer: false },
-    { code: 'STN-07', name: 'Civic Center', line: 'Red Line', zone: 'Zone 1', color: '#e11d48', order: 2, transfer: false },
-    { code: 'STN-08', name: 'Grand Interchange', line: 'Red Line', zone: 'Zone 2', color: '#e11d48', order: 3, transfer: true },
-    { code: 'STN-09', name: 'Harbor View', line: 'Red Line', zone: 'Zone 3', color: '#e11d48', order: 4, transfer: false },
+    { code: 'STN-01', name: 'Central Terminus', line_name: 'Blue Line', zone: 'Zone 1', color: '#0284c7', seq_order: 1, is_transfer: false, active: true },
+    { code: 'STN-02', name: 'Market Square', line_name: 'Blue Line', zone: 'Zone 1', color: '#0284c7', seq_order: 2, is_transfer: false, active: true },
+    { code: 'STN-03', name: 'Tech Park North', line_name: 'Blue Line', zone: 'Zone 2', color: '#0284c7', seq_order: 3, is_transfer: false, active: true },
+    { code: 'STN-04', name: 'Financial District', line_name: 'Blue Line', zone: 'Zone 2', color: '#0284c7', seq_order: 4, is_transfer: false, active: true },
+    { code: 'STN-05', name: 'Airport Junction', line_name: 'Blue Line', zone: 'Zone 3', color: '#0284c7', seq_order: 5, is_transfer: false, active: true },
+    { code: 'STN-06', name: 'West University', line_name: 'Red Line', zone: 'Zone 1', color: '#e11d48', seq_order: 1, is_transfer: false, active: true },
+    { code: 'STN-07', name: 'Civic Center', line_name: 'Red Line', zone: 'Zone 1', color: '#e11d48', seq_order: 2, is_transfer: false, active: true },
+    { code: 'STN-08', name: 'Grand Interchange', line_name: 'Red Line', zone: 'Zone 2', color: '#e11d48', seq_order: 3, is_transfer: true, active: true },
+    { code: 'STN-09', name: 'Harbor View', line_name: 'Red Line', zone: 'Zone 3', color: '#e11d48', seq_order: 4, is_transfer: false, active: true },
   ];
 
   for (const s of stations) {
-    await query(
-      `INSERT INTO stations (code, name, line_name, zone, color, seq_order, is_transfer, active)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, true)
-       ON CONFLICT (code) DO NOTHING`,
-      [s.code, s.name, s.line, s.zone, s.color, s.order, s.transfer]
-    );
+    const existing = await stationsCol.findOne({ code: s.code });
+    if (!existing) {
+      await stationsCol.insertOne(s);
+    }
   }
 
   // 2. Seed Ticket Types (Mirrors x_mtts_ticket_type)
+  const ticketTypesCol = getCollection('ticket_types');
   const ticketTypes = [
     {
       code: 'SINGLE',
       name: 'Single Journey',
-      model: 'Distance_Based',
-      hours: 4,
+      pricing_model: 'Distance_Based',
+      validity_hours: 4,
       multiplier: 1.0,
-      fixedFare: null,
-      desc: 'One-way transit valid for 4 hours from time of issuance.',
-      badge: 'Standard'
+      fixed_fare: null,
+      description: 'One-way transit valid for 4 hours from time of issuance.',
+      badge: 'Standard',
+      active: true
     },
     {
       code: 'RETURN',
       name: 'Return Ticket',
-      model: 'Distance_Based',
-      hours: 24,
+      pricing_model: 'Distance_Based',
+      validity_hours: 24,
       multiplier: 1.8,
-      fixedFare: null,
-      desc: 'Round-trip transit valid for 24 hours with a 20% discount on the return leg.',
-      badge: '20% Discount'
+      fixed_fare: null,
+      description: 'Round-trip transit valid for 24 hours with a 20% discount on the return leg.',
+      badge: '20% Discount',
+      active: true
     },
     {
       code: 'PASS',
       name: 'Daily Pass',
-      model: 'Fixed',
-      hours: 24,
+      pricing_model: 'Fixed',
+      validity_hours: 24,
       multiplier: 1.0,
-      fixedFare: 50.00,
-      desc: 'Unlimited all-day transit across all lines and zones for 24 hours.',
-      badge: 'Best Value'
+      fixed_fare: 50.00,
+      description: 'Unlimited all-day transit across all lines and zones for 24 hours.',
+      badge: 'Best Value',
+      active: true
     }
   ];
 
   for (const t of ticketTypes) {
-    await query(
-      `INSERT INTO ticket_types (code, name, pricing_model, validity_hours, multiplier, fixed_fare, description, badge, active)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, true)
-       ON CONFLICT (code) DO NOTHING`,
-      [t.code, t.name, t.model, t.hours, t.multiplier, t.fixedFare, t.desc, t.badge]
-    );
+    const existing = await ticketTypesCol.findOne({ code: t.code });
+    if (!existing) {
+      await ticketTypesCol.insertOne(t);
+    }
   }
 
   // 3. Seed Fare Rules (Mirrors x_mtts_fare_rule)
+  const fareRulesCol = getCollection('fare_rules');
   const fareRules = [
-    { id: 'FR-SINGLE-01', code: 'SINGLE', rate: 2.50, min: 10.00 },
-    { id: 'FR-RETURN-01', code: 'RETURN', rate: 2.50, min: 10.00 },
-    { id: 'FR-PASS-01', code: 'PASS', rate: 0.00, min: 50.00 }
+    { rule_id: 'FR-SINGLE-01', ticket_type_code: 'SINGLE', rate_per_km: 2.50, minimum_fare: 10.00, currency: 'USD', active: true },
+    { rule_id: 'FR-RETURN-01', ticket_type_code: 'RETURN', rate_per_km: 2.50, minimum_fare: 10.00, currency: 'USD', active: true },
+    { rule_id: 'FR-PASS-01', ticket_type_code: 'PASS', rate_per_km: 0.00, minimum_fare: 50.00, currency: 'USD', active: true }
   ];
 
   for (const f of fareRules) {
-    await query(
-      `INSERT INTO fare_rules (rule_id, ticket_type_code, rate_per_km, minimum_fare, currency, active)
-       VALUES ($1, $2, $3, $4, 'USD', true)
-       ON CONFLICT (rule_id) DO NOTHING`,
-      [f.id, f.code, f.rate, f.min]
-    );
+    const existing = await fareRulesCol.findOne({ rule_id: f.rule_id });
+    if (!existing) {
+      await fareRulesCol.insertOne(f);
+    }
   }
 
   // 4. Seed Route Network Matrix (Mirrors x_mtts_route)
+  const routesCol = getCollection('routes');
   const routes = [
-    { id: 'RT-001', o: 'STN-01', d: 'STN-02', km: 4.20, line: 'Blue Line' },
-    { id: 'RT-002', o: 'STN-02', d: 'STN-01', km: 4.20, line: 'Blue Line' },
-    { id: 'RT-003', o: 'STN-01', d: 'STN-03', km: 8.50, line: 'Blue Line' },
-    { id: 'RT-004', o: 'STN-03', d: 'STN-01', km: 8.50, line: 'Blue Line' },
-    { id: 'RT-005', o: 'STN-01', d: 'STN-05', km: 14.20, line: 'Blue Line' },
-    { id: 'RT-006', o: 'STN-05', d: 'STN-01', km: 14.20, line: 'Blue Line' },
-    { id: 'RT-007', o: 'STN-02', d: 'STN-04', km: 7.80, line: 'Blue Line' },
-    { id: 'RT-008', o: 'STN-04', d: 'STN-02', km: 7.80, line: 'Blue Line' },
-    { id: 'RT-009', o: 'STN-06', d: 'STN-07', km: 3.50, line: 'Red Line' },
-    { id: 'RT-010', o: 'STN-07', d: 'STN-06', km: 3.50, line: 'Red Line' },
-    { id: 'RT-011', o: 'STN-06', d: 'STN-08', km: 9.10, line: 'Red Line' },
-    { id: 'RT-012', o: 'STN-08', d: 'STN-06', km: 9.10, line: 'Red Line' },
-    { id: 'RT-013', o: 'STN-07', d: 'STN-09', km: 11.40, line: 'Red Line' },
-    { id: 'RT-014', o: 'STN-09', d: 'STN-07', km: 11.40, line: 'Red Line' },
-    { id: 'RT-015', o: 'STN-01', d: 'STN-08', km: 18.60, line: 'Inter-Line Transfer' }
+    { id: 'RT-001', origin_station_code: 'STN-01', destination_station_code: 'STN-02', origin_station_name: 'Central Terminus', destination_station_name: 'Market Square', distance_km: 4.20, line_name: 'Blue Line', active: true },
+    { id: 'RT-002', origin_station_code: 'STN-02', destination_station_code: 'STN-01', origin_station_name: 'Market Square', destination_station_name: 'Central Terminus', distance_km: 4.20, line_name: 'Blue Line', active: true },
+    { id: 'RT-003', origin_station_code: 'STN-01', destination_station_code: 'STN-03', origin_station_name: 'Central Terminus', destination_station_name: 'Tech Park North', distance_km: 8.50, line_name: 'Blue Line', active: true },
+    { id: 'RT-004', origin_station_code: 'STN-03', destination_station_code: 'STN-01', origin_station_name: 'Tech Park North', destination_station_name: 'Central Terminus', distance_km: 8.50, line_name: 'Blue Line', active: true },
+    { id: 'RT-005', origin_station_code: 'STN-01', destination_station_code: 'STN-05', origin_station_name: 'Central Terminus', destination_station_name: 'Airport Junction', distance_km: 14.20, line_name: 'Blue Line', active: true },
+    { id: 'RT-006', origin_station_code: 'STN-05', destination_station_code: 'STN-01', origin_station_name: 'Airport Junction', destination_station_name: 'Central Terminus', distance_km: 14.20, line_name: 'Blue Line', active: true },
+    { id: 'RT-007', origin_station_code: 'STN-02', destination_station_code: 'STN-04', origin_station_name: 'Market Square', destination_station_name: 'Financial District', distance_km: 7.80, line_name: 'Blue Line', active: true },
+    { id: 'RT-008', origin_station_code: 'STN-04', destination_station_code: 'STN-02', origin_station_name: 'Financial District', destination_station_name: 'Market Square', distance_km: 7.80, line_name: 'Blue Line', active: true },
+    { id: 'RT-009', origin_station_code: 'STN-06', destination_station_code: 'STN-07', origin_station_name: 'West University', destination_station_name: 'Civic Center', distance_km: 3.50, line_name: 'Red Line', active: true },
+    { id: 'RT-010', origin_station_code: 'STN-07', destination_station_code: 'STN-06', origin_station_name: 'Civic Center', destination_station_name: 'West University', distance_km: 3.50, line_name: 'Red Line', active: true },
+    { id: 'RT-011', origin_station_code: 'STN-06', destination_station_code: 'STN-08', origin_station_name: 'West University', destination_station_name: 'Grand Interchange', distance_km: 9.10, line_name: 'Red Line', active: true },
+    { id: 'RT-012', origin_station_code: 'STN-08', destination_station_code: 'STN-06', origin_station_name: 'Grand Interchange', destination_station_name: 'West University', distance_km: 9.10, line_name: 'Red Line', active: true },
+    { id: 'RT-013', origin_station_code: 'STN-07', destination_station_code: 'STN-09', origin_station_name: 'Civic Center', destination_station_name: 'Harbor View', distance_km: 11.40, line_name: 'Red Line', active: true },
+    { id: 'RT-014', origin_station_code: 'STN-09', destination_station_code: 'STN-07', origin_station_name: 'Harbor View', destination_station_name: 'Civic Center', distance_km: 11.40, line_name: 'Red Line', active: true },
+    { id: 'RT-015', origin_station_code: 'STN-01', destination_station_code: 'STN-08', origin_station_name: 'Central Terminus', destination_station_name: 'Grand Interchange', distance_km: 18.60, line_name: 'Inter-Line Transfer', active: true }
   ];
 
   for (const r of routes) {
-    await query(
-      `INSERT INTO routes (id, origin_station_code, destination_station_code, distance_km, line_name, active)
-       VALUES ($1, $2, $3, $4, $5, true)
-       ON CONFLICT (id) DO NOTHING`,
-      [r.id, r.o, r.d, r.km, r.line]
-    );
+    const existing = await routesCol.findOne({ id: r.id });
+    if (!existing) {
+      await routesCol.insertOne(r);
+    }
   }
 
   // 5. Seed Initial Global Demo Sample Booking
-  await query(
-    `INSERT INTO bookings (
-      id, session_id, booking_reference, ticket_number, commuter_name, commuter_email,
-      source_station_code, destination_station_code, travel_date, ticket_type_code,
-      passenger_count, distance_km, unit_fare, total_fare, status, payment_status,
-      qr_token_hash, qr_payload, scans_count
-    ) VALUES (
-      'bkg-demo-seed-01', 'demo-global-seed', 'MTTS-20261016-00012', 'TKT-20261016-00008',
-      'Alex Rivera', 'alex.rivera@metro.internal', 'STN-01', 'STN-05', CURRENT_DATE,
-      'RETURN', 2, 14.20, 63.90, 127.80, 'Ticket Issued', 'PAID',
-      'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
-      'MTTS|TKT-20261016-00008|MTTS-20261016-00012|e3b0c442|2026-10-16|STN-01|STN-05|2|RETURN|PAID',
-      1
-    ) ON CONFLICT (id) DO NOTHING`
-  );
+  const bookingsCol = getCollection('bookings');
+  const demoSeed = await bookingsCol.findOne({ id: 'bkg-demo-seed-01' });
+  if (!demoSeed) {
+    await bookingsCol.insertOne({
+      id: 'bkg-demo-seed-01',
+      session_id: 'demo-global-seed',
+      booking_reference: 'MTTS-20261016-00012',
+      ticket_number: 'TKT-20261016-00008',
+      commuter_name: 'Alex Rivera',
+      commuter_email: 'alex.rivera@metro.internal',
+      source_station_code: 'STN-01',
+      source_station_name: 'Central Terminus',
+      destination_station_code: 'STN-05',
+      destination_station_name: 'Airport Junction',
+      travel_date: new Date().toISOString().slice(0, 10),
+      ticket_type_code: 'RETURN',
+      ticket_type_name: 'Return Ticket',
+      passenger_count: 2,
+      distance_km: 14.20,
+      unit_fare: 63.90,
+      total_fare: 127.80,
+      status: 'Ticket Issued',
+      payment_status: 'PAID',
+      qr_token_hash: 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
+      qr_payload: 'MTTS|TKT-20261016-00008|MTTS-20261016-00012|e3b0c442|2026-10-16|STN-01|STN-05|2|RETURN|PAID',
+      scans_count: 1,
+      created_at: new Date().toISOString()
+    });
+  }
 
-  console.log('[DB Seed] Transit master data and initial demo records seeded successfully.');
+  console.log('[DB Seed] MongoDB master transit collections and initial demo documents seeded successfully.');
 }
 
 // Direct CLI execution support
 if (process.argv[1]?.endsWith('seed.js')) {
-  import('./index.js').then(async ({ initDb }) => {
-    await initDb();
+  initDb().then(async () => {
     await seedDatabase();
     process.exit(0);
   });

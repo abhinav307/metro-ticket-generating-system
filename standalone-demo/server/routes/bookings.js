@@ -1,6 +1,6 @@
 import express from 'express';
 import crypto from 'crypto';
-import { query } from '../db/index.js';
+import { getCollection } from '../db/index.js';
 import { lookupRouteDistance } from './fare.js';
 
 const router = express.Router();
@@ -19,48 +19,28 @@ function computeTokenHash(tokenString) {
   return crypto.createHmac('sha256', 'mtts-demo-secret-key-salt').update(tokenString).digest('hex');
 }
 
-// GET /api/bookings — Retrieve bookings for the current visitor session
+// GET /api/bookings — Retrieve bookings from MongoDB for the current visitor session
 router.get('/', async (req, res, next) => {
   try {
     const sessionId = req.sessionId;
+    const bookingsCol = getCollection('bookings');
 
-    // Fetch bookings belonging to this session, plus the global demo seed if none created yet
-    let result = await query(
-      `SELECT b.*,
-              s1.name as source_station_name, s2.name as destination_station_name,
-              tt.name as ticket_type_name
-       FROM bookings b
-       JOIN stations s1 ON b.source_station_code = s1.code
-       JOIN stations s2 ON b.destination_station_code = s2.code
-       JOIN ticket_types tt ON b.ticket_type_code = tt.code
-       WHERE b.session_id = $1
-       ORDER BY b.created_at DESC`,
-      [sessionId]
-    );
+    // Fetch bookings belonging to this session, sorted by creation date descending
+    let docs = await bookingsCol.find({ session_id: sessionId }).sort({ created_at: -1 }).toArray();
 
-    // If visitor has no personal bookings yet, show the global demo seed booking
-    if (result.rows.length === 0) {
-      const demoRes = await query(
-        `SELECT b.*,
-                s1.name as source_station_name, s2.name as destination_station_name,
-                tt.name as ticket_type_name
-         FROM bookings b
-         JOIN stations s1 ON b.source_station_code = s1.code
-         JOIN stations s2 ON b.destination_station_code = s2.code
-         JOIN ticket_types tt ON b.ticket_type_code = tt.code
-         WHERE b.session_id = 'demo-global-seed'
-         ORDER BY b.created_at DESC`
-      );
-      return res.json({ bookings: demoRes.rows, isSampleData: true });
+    // If visitor has no personal bookings yet, return the global demo seed booking
+    if (docs.length === 0) {
+      const demoDocs = await bookingsCol.find({ session_id: 'demo-global-seed' }).sort({ created_at: -1 }).toArray();
+      return res.json({ bookings: demoDocs, isSampleData: true });
     }
 
-    res.json({ bookings: result.rows, isSampleData: false });
+    res.json({ bookings: docs, isSampleData: false });
   } catch (err) {
     next(err);
   }
 });
 
-// POST /api/bookings — Create booking with authoritative server-side calculation and cryptographic token minting
+// POST /api/bookings — Create booking document in MongoDB with authoritative fare and cryptographic token
 router.post('/', async (req, res, next) => {
   try {
     const sessionId = req.sessionId;
@@ -85,22 +65,19 @@ router.post('/', async (req, res, next) => {
     const count = Math.max(1, Math.min(6, parseInt(passengerCount, 10) || 1));
     const distanceKm = await lookupRouteDistance(sourceStationCode, destinationStationCode);
 
-    // Look up ticket type & tariff
-    const typeRes = await query(
-      `SELECT tt.*, fr.rate_per_km, fr.minimum_fare
-       FROM ticket_types tt
-       LEFT JOIN fare_rules fr ON tt.code = fr.ticket_type_code
-       WHERE tt.code = $1 AND tt.active = true`,
-      [ticketTypeCode || 'SINGLE']
-    );
+    // Look up ticket type & tariff in MongoDB
+    const ticketTypesCol = getCollection('ticket_types');
+    const fareRulesCol = getCollection('fare_rules');
+    const stationsCol = getCollection('stations');
 
-    if (typeRes.rows.length === 0) {
+    const tt = await ticketTypesCol.findOne({ code: ticketTypeCode || 'SINGLE', active: true });
+    if (!tt) {
       return res.status(400).json({ error: 'Invalid ticket type.' });
     }
 
-    const tt = typeRes.rows[0];
-    const ratePerKm = parseFloat(tt.rate_per_km || 2.50);
-    const minimumFare = parseFloat(tt.minimum_fare || 10.00);
+    const fr = await fareRulesCol.findOne({ ticket_type_code: tt.code, active: true });
+    const ratePerKm = parseFloat(fr?.rate_per_km || 2.50);
+    const minimumFare = parseFloat(fr?.minimum_fare || 10.00);
     const multiplier = parseFloat(tt.multiplier || 1.0);
     const fixedFare = tt.fixed_fare ? parseFloat(tt.fixed_fare) : null;
 
@@ -122,41 +99,41 @@ router.post('/', async (req, res, next) => {
     const qrPayload = `MTTS|${ticketNumber}|${bookingReference}|${qrTokenHash.slice(0, 8)}|${travelDate}|${sourceStationCode}|${destinationStationCode}|${count}|${tt.code}|PAID`;
     const bookingId = `bkg-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
 
-    const insertResult = await query(
-      `INSERT INTO bookings (
-        id, session_id, booking_reference, ticket_number, commuter_name, commuter_email,
-        source_station_code, destination_station_code, travel_date, ticket_type_code,
-        passenger_count, distance_km, unit_fare, total_fare, status, payment_status,
-        qr_token_hash, qr_payload, scans_count
-      ) VALUES (
-        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, 'Ticket Issued', 'PAID', $15, $16, 0
-      ) RETURNING *`,
-      [
-        bookingId, sessionId, bookingReference, ticketNumber,
-        commuterName || 'Registered Commuter',
-        commuterEmail || 'commuter@metro.internal',
-        sourceStationCode, destinationStationCode, travelDate || new Date(),
-        tt.code, count, distanceKm, unitFare, totalFare,
-        qrTokenHash, qrPayload
-      ]
-    );
+    const srcStation = await stationsCol.findOne({ code: sourceStationCode });
+    const destStation = await stationsCol.findOne({ code: destinationStationCode });
 
-    // Fetch enriched row with station and type names
-    const enriched = await query(
-      `SELECT b.*,
-              s1.name as source_station_name, s2.name as destination_station_name,
-              tt.name as ticket_type_name
-       FROM bookings b
-       JOIN stations s1 ON b.source_station_code = s1.code
-       JOIN stations s2 ON b.destination_station_code = s2.code
-       JOIN ticket_types tt ON b.ticket_type_code = tt.code
-       WHERE b.id = $1`,
-      [bookingId]
-    );
+    const newBooking = {
+      id: bookingId,
+      session_id: sessionId,
+      booking_reference: bookingReference,
+      ticket_number: ticketNumber,
+      commuter_name: commuterName || 'Registered Commuter',
+      commuter_email: commuterEmail || 'commuter@metro.internal',
+      source_station_code: sourceStationCode,
+      source_station_name: srcStation?.name || sourceStationCode,
+      destination_station_code: destinationStationCode,
+      destination_station_name: destStation?.name || destinationStationCode,
+      travel_date: travelDate || new Date().toISOString().slice(0, 10),
+      ticket_type_code: tt.code,
+      ticket_type_name: tt.name,
+      passenger_count: count,
+      distance_km: distanceKm,
+      unit_fare: unitFare,
+      total_fare: totalFare,
+      status: 'Ticket Issued',
+      payment_status: 'PAID',
+      qr_token_hash: qrTokenHash,
+      qr_payload: qrPayload,
+      scans_count: 0,
+      created_at: new Date().toISOString()
+    };
+
+    const bookingsCol = getCollection('bookings');
+    await bookingsCol.insertOne(newBooking);
 
     res.status(201).json({
       success: true,
-      booking: enriched.rows[0],
+      booking: newBooking,
       simulated_workflow: {
         flow_designer: 'x_mtts.MetroBookingApprovalAndFulfillmentFlow',
         status: 'Completed',
@@ -174,19 +151,18 @@ router.post('/', async (req, res, next) => {
   }
 });
 
-// POST /api/bookings/:id/cancel — Demonstrate ticket cancellation and refund quote
+// POST /api/bookings/:id/cancel — Demonstrate ticket cancellation and refund quote in MongoDB
 router.post('/:id/cancel', async (req, res, next) => {
   try {
     const bookingId = req.params.id;
     const { reason } = req.body;
     const sessionId = req.sessionId;
+    const bookingsCol = getCollection('bookings');
 
-    const bkgRes = await query('SELECT * FROM bookings WHERE id = $1', [bookingId]);
-    if (bkgRes.rows.length === 0) {
+    const booking = await bookingsCol.findOne({ id: bookingId });
+    if (!booking) {
       return res.status(404).json({ error: 'Booking not found.' });
     }
-
-    const booking = bkgRes.rows[0];
 
     // Verify session ownership (unless global sample)
     if (booking.session_id !== sessionId && booking.session_id !== 'demo-global-seed') {
@@ -199,23 +175,27 @@ router.post('/:id/cancel', async (req, res, next) => {
 
     const refundRate = 0.80; // 80% refund standard (MetroRefundCalculator)
     const refundAmount = +(parseFloat(booking.total_fare) * refundRate).toFixed(2);
+    const now = new Date().toISOString();
 
-    const updateRes = await query(
-      `UPDATE bookings
-       SET status = 'Cancelled',
-           cancellation_reason = $1,
-           cancelled_at = CURRENT_TIMESTAMP,
-           refund_amount = $2,
-           refund_status = 'PROCESSED',
-           updated_at = CURRENT_TIMESTAMP
-       WHERE id = $3
-       RETURNING *`,
-      [reason || 'Commuter schedule change', refundAmount, bookingId]
+    await bookingsCol.updateOne(
+      { id: bookingId },
+      {
+        $set: {
+          status: 'Cancelled',
+          cancellation_reason: reason || 'Commuter schedule change',
+          cancelled_at: now,
+          refund_amount: refundAmount,
+          refund_status: 'PROCESSED',
+          updated_at: now
+        }
+      }
     );
+
+    const updatedBooking = await bookingsCol.findOne({ id: bookingId });
 
     res.json({
       success: true,
-      booking: updateRes.rows[0],
+      booking: updatedBooking,
       refund: {
         originalTotalFare: parseFloat(booking.total_fare),
         refundRate: 0.80,

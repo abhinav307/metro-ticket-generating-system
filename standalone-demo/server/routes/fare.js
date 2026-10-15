@@ -1,37 +1,33 @@
 import express from 'express';
-import { query } from '../db/index.js';
+import { getCollection } from '../db/index.js';
 
 const router = express.Router();
 
-// Helper to look up distance from database with sequence fallback
+// Helper to look up track distance from MongoDB routes collection with sequence fallback
 export async function lookupRouteDistance(originCode, destCode) {
   if (!originCode || !destCode || originCode === destCode) return 0;
 
-  // Direct route check
-  const direct = await query(
-    `SELECT distance_km FROM routes
-     WHERE (origin_station_code = $1 AND destination_station_code = $2)
-        OR (origin_station_code = $2 AND destination_station_code = $1)
-     LIMIT 1`,
-    [originCode, destCode]
-  );
+  // Direct route check in routes collection
+  const routesCol = getCollection('routes');
+  const direct = await routesCol.findOne({
+    $or: [
+      { origin_station_code: originCode, destination_station_code: destCode },
+      { origin_station_code: destCode, destination_station_code: originCode }
+    ]
+  });
 
-  if (direct.rows.length > 0) {
-    return parseFloat(direct.rows[0].distance_km);
+  if (direct) {
+    return parseFloat(direct.distance_km);
   }
 
-  // Fallback distance calculation using sequence order
-  const stns = await query(
-    `SELECT code, line_name, seq_order FROM stations WHERE code IN ($1, $2)`,
-    [originCode, destCode]
-  );
+  // Fallback distance calculation using station sequence orders
+  const stationsCol = getCollection('stations');
+  const s1 = await stationsCol.findOne({ code: originCode });
+  const s2 = await stationsCol.findOne({ code: destCode });
 
-  if (stns.rows.length === 2) {
-    const [s1, s2] = stns.rows;
-    if (s1.line_name === s2.line_name) {
-      const diff = Math.abs(s1.seq_order - s2.seq_order);
-      return Math.max(2.5, +(diff * 3.8).toFixed(2));
-    }
+  if (s1 && s2 && s1.line_name === s2.line_name) {
+    const diff = Math.abs(s1.seq_order - s2.seq_order);
+    return Math.max(2.5, +(diff * 3.8).toFixed(2));
   }
 
   return 16.50; // Inter-line transfer fallback
@@ -53,22 +49,19 @@ router.post('/calculate', async (req, res, next) => {
     const count = Math.max(1, Math.min(6, parseInt(passengerCount, 10) || 1));
     const distanceKm = await lookupRouteDistance(originCode, destCode);
 
-    // Fetch ticket type and fare rules
-    const typeRes = await query(
-      `SELECT tt.*, fr.rate_per_km, fr.minimum_fare
-       FROM ticket_types tt
-       LEFT JOIN fare_rules fr ON tt.code = fr.ticket_type_code
-       WHERE tt.code = $1 AND tt.active = true`,
-      [ticketTypeCode || 'SINGLE']
-    );
+    // Fetch ticket type and fare rules from MongoDB
+    const ticketTypesCol = getCollection('ticket_types');
+    const fareRulesCol = getCollection('fare_rules');
 
-    if (typeRes.rows.length === 0) {
+    const tt = await ticketTypesCol.findOne({ code: ticketTypeCode || 'SINGLE', active: true });
+    if (!tt) {
       return res.status(400).json({ error: 'Invalid or inactive ticket type.' });
     }
 
-    const tt = typeRes.rows[0];
-    const ratePerKm = parseFloat(tt.rate_per_km || 2.50);
-    const minimumFare = parseFloat(tt.minimum_fare || 10.00);
+    const fr = await fareRulesCol.findOne({ ticket_type_code: tt.code, active: true });
+
+    const ratePerKm = parseFloat(fr?.rate_per_km || 2.50);
+    const minimumFare = parseFloat(fr?.minimum_fare || 10.00);
     const multiplier = parseFloat(tt.multiplier || 1.0);
     const fixedFare = tt.fixed_fare ? parseFloat(tt.fixed_fare) : null;
 

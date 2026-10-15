@@ -1,17 +1,10 @@
 import express from 'express';
 import crypto from 'crypto';
-import { query } from '../db/index.js';
+import { getCollection } from '../db/index.js';
 
 const router = express.Router();
 
-function timingSafeCheck(a, b) {
-  const bufA = Buffer.from(String(a));
-  const bufB = Buffer.from(String(b));
-  if (bufA.length !== bufB.length) return false;
-  return crypto.timingSafeEqual(bufA, bufB);
-}
-
-// POST /api/scanner/verify — Turnstile REST API Ticket Verification
+// POST /api/scanner/verify — Turnstile REST API Ticket Verification with MongoDB
 // Replicates /api/x_mtts/scanner/verify-ticket
 router.post('/verify', async (req, res, next) => {
   const startTime = process.hrtime.bigint();
@@ -25,30 +18,28 @@ router.post('/verify', async (req, res, next) => {
     let message = 'Gate Unlocked: Valid Digital Transit Ticket';
     let matchedBooking = null;
 
+    const bookingsCol = getCollection('bookings');
+    const scanEventsCol = getCollection('scan_events');
+
     if (!cleanTicket) {
       outcome = 'UNAUTHORIZED';
       gateStatus = 'HOLD';
       httpCode = 401;
       message = 'Error 401: Missing Ticket Number or Bearer Token';
     } else {
-      const bkgRes = await query(
-        `SELECT b.*, s1.name as source_station_name, s2.name as destination_station_name
-         FROM bookings b
-         JOIN stations s1 ON b.source_station_code = s1.code
-         JOIN stations s2 ON b.destination_station_code = s2.code
-         WHERE b.ticket_number = $1 OR b.booking_reference = $1
-         LIMIT 1`,
-        [cleanTicket]
-      );
+      matchedBooking = await bookingsCol.findOne({
+        $or: [
+          { ticket_number: cleanTicket },
+          { booking_reference: cleanTicket }
+        ]
+      });
 
-      if (bkgRes.rows.length === 0) {
+      if (!matchedBooking) {
         outcome = 'TICKET_NOT_FOUND';
         gateStatus = 'HOLD';
         httpCode = 404;
         message = 'Error 404: Unknown Ticket Number. Turnstile Gate Locked.';
       } else {
-        matchedBooking = bkgRes.rows[0];
-
         if (matchedBooking.status === 'Cancelled') {
           outcome = 'TICKET_CANCELLED_OR_INVALID';
           gateStatus = 'HOLD';
@@ -60,13 +51,13 @@ router.post('/verify', async (req, res, next) => {
           httpCode = 403;
           message = `Error 403: Ticket status is '${matchedBooking.status}'. Pending approval.`;
         } else {
-          // Valid ticket: update scan count
-          await query(
-            `UPDATE bookings
-             SET scans_count = scans_count + 1,
-                 last_scanned = CURRENT_TIMESTAMP
-             WHERE id = $1`,
-            [matchedBooking.id]
+          // Valid ticket: increment scan count and record last_scanned
+          await bookingsCol.updateOne(
+            { id: matchedBooking.id },
+            {
+              $inc: { scans_count: 1 },
+              $set: { last_scanned: new Date().toISOString() }
+            }
           );
 
           outcome = 'VALID';
@@ -84,33 +75,27 @@ router.post('/verify', async (req, res, next) => {
     const correlationId = `SCAN-CORR-${Date.now()}`;
     const checksum = crypto.createHash('sha256').update(`SCAN|${cleanTicket}|${gateId}|${outcome}|${Date.now()}`).digest('hex');
 
-    // Audit event record (mirrors x_mtts_scan_event)
-    await query(
-      `INSERT INTO scan_events (
-        id, session_id, correlation_id, ticket_number, gate_id, station_code,
-        outcome, gate_status, http_code, response_time_ms, message, checksum
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
-      [
-        eventId, req.sessionId || 'anonymous', correlationId, cleanTicket || 'N/A',
-        gateId, stationCode, outcome, gateStatus, httpCode, durationMs, message, checksum
-      ]
-    );
+    const scanEventDoc = {
+      id: eventId,
+      session_id: req.sessionId || 'anonymous',
+      correlation_id: correlationId,
+      ticket_number: cleanTicket || 'N/A',
+      gate_id: gateId,
+      station_code: stationCode,
+      scan_timestamp: new Date().toISOString(),
+      outcome,
+      gate_status: gateStatus,
+      http_code: httpCode,
+      response_time_ms: durationMs,
+      message,
+      checksum
+    };
+
+    // Insert into append-only turnstile audit log in MongoDB (mirrors x_mtts_scan_event)
+    await scanEventsCol.insertOne(scanEventDoc);
 
     res.status(httpCode).json({
-      scanEvent: {
-        id: eventId,
-        correlation_id: correlationId,
-        ticket_number: cleanTicket || 'N/A',
-        gate_id: gateId,
-        station_code: stationCode,
-        scan_timestamp: new Date().toISOString(),
-        outcome,
-        gate_status: gateStatus,
-        http_code: httpCode,
-        response_time_ms: durationMs,
-        message,
-        checksum
-      },
+      scanEvent: scanEventDoc,
       matchedBooking: matchedBooking ? {
         ticket_number: matchedBooking.ticket_number,
         booking_reference: matchedBooking.booking_reference,
@@ -126,17 +111,23 @@ router.post('/verify', async (req, res, next) => {
   }
 });
 
-// GET /api/scanner/events — Retrieve recent scan events
+// GET /api/scanner/events — Retrieve recent scan events from MongoDB
 router.get('/events', async (req, res, next) => {
   try {
-    const result = await query(
-      `SELECT se.*, s.name as station_name
-       FROM scan_events se
-       LEFT JOIN stations s ON se.station_code = s.code
-       ORDER BY se.scan_timestamp DESC
-       LIMIT 30`
-    );
-    res.json({ events: result.rows });
+    const scanEventsCol = getCollection('scan_events');
+    const stationsCol = getCollection('stations');
+
+    const events = await scanEventsCol.find({}).sort({ scan_timestamp: -1 }).limit(30).toArray();
+
+    // Enrich with station_name if missing
+    for (const ev of events) {
+      if (!ev.station_name && ev.station_code) {
+        const stn = await stationsCol.findOne({ code: ev.station_code });
+        if (stn) ev.station_name = stn.name;
+      }
+    }
+
+    res.json({ events });
   } catch (err) {
     next(err);
   }

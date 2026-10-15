@@ -3,7 +3,7 @@ import { Layers, CheckCircle2, ShieldCheck, Database, GitBranch, Terminal, Exter
 
 export default function ArchitectureView({ backendStatus }) {
   const isHealthy = backendStatus?.status === 'ok';
-  const dbEngine = backendStatus?.database?.engine || 'PostgreSQL';
+  const dbEngine = backendStatus?.database?.engine?.includes('atlas') ? 'MongoDB Atlas' : 'MongoDB';
 
   const tables = [
     { name: 'x_mtts_station', purpose: 'Station Master (Codes, names, line zones, sequence order)' },
@@ -23,7 +23,7 @@ export default function ArchitectureView({ backendStatus }) {
   ];
 
   const apiEndpoints = [
-    { method: 'GET', path: '/api/health', desc: 'System health check, uptime, and database connectivity' },
+    { method: 'GET', path: '/api/health', desc: 'System health check, uptime, and MongoDB connectivity' },
     { method: 'GET', path: '/api/stations', desc: 'Active transit station catalogue (Mirrors x_mtts_station)' },
     { method: 'GET', path: '/api/routes', desc: 'Active track segments and route distance matrix (Mirrors x_mtts_route)' },
     { method: 'POST', path: '/api/fare/calculate', desc: 'Authoritative server-side tariff & discount calculator' },
@@ -59,7 +59,7 @@ export default function ArchitectureView({ backendStatus }) {
         </div>
 
         <div style={{ background: 'rgba(2, 132, 199, 0.08)', border: '1px solid rgba(2, 132, 199, 0.25)', borderRadius: '10px', padding: '16px', fontSize: '0.85rem', color: '#e2e8f0', lineHeight: 1.6 }}>
-          <strong>Notice on Demonstration Reality &amp; Full-Stack Architecture:</strong> This web application is a dynamic full-stack demonstration powered by a <strong>Node.js/Express REST API</strong> and <strong>PostgreSQL</strong> persistent storage. The business logic faithfully replicates the Scoped Application <code>x_mtts</code> algorithms (tariffs, cryptographic HMAC token hashes, turnstile REST validation, and 80% refund policies). While the Node.js/Express and PostgreSQL stack is real and live, the ServiceNow platform objects (GlideRecord, Flow Designer approvals, and turnstile gates) are simulated in this architecture. No live ServiceNow development instance is connected.
+          <strong>Notice on Demonstration Reality &amp; Full-Stack Architecture:</strong> This web application is a dynamic full-stack demonstration powered by a <strong>Node.js/Express REST API</strong> and <strong>MongoDB</strong> persistent storage. The business logic faithfully replicates the Scoped Application <code>x_mtts</code> algorithms (tariffs, cryptographic HMAC token hashes, turnstile REST validation, and 80% refund policies). While the Node.js/Express and MongoDB stack is real and live, the ServiceNow platform objects (GlideRecord, Flow Designer approvals, and turnstile gates) are simulated in this architecture. No live ServiceNow development instance is connected.
         </div>
       </div>
 
@@ -149,12 +149,12 @@ export default function ArchitectureView({ backendStatus }) {
         </div>
       </div>
 
-      {/* Full-Stack REST API and PostgreSQL Engine */}
+      {/* Full-Stack REST API and MongoDB Engine */}
       <div className="card">
         <div className="card-header">
           <h3>
             <GitBranch size={20} className="text-emerald-400" />
-            <span>Full-Stack REST API &amp; PostgreSQL Persistent Engine</span>
+            <span>Full-Stack REST API &amp; MongoDB Persistent Engine</span>
           </h3>
           <span className="card-header-badge">Render Web Service Architecture</span>
         </div>

@@ -1,5 +1,7 @@
 import assert from 'assert';
 import { startServer } from '../index.js';
+import { getCollection, getDbInfo, closeDb, connectDb, sanitizeMongoUri } from '../db/index.js';
+import { config } from '../config.js';
 
 let server = null;
 const TEST_PORT = 5055;
@@ -25,9 +27,19 @@ async function test(name, fn) {
 }
 
 async function runTests() {
+  const isRealAtlas = !!config.mongodbUri;
+
   console.log('\n======================================================');
   console.log(' MTTS Full-Stack Backend Integration Test Suite');
-  console.log(' Scope: x_mtts | Dual-Mode: pg-mem embedded PostgreSQL');
+  console.log(' Scope: x_mtts | Database Driver: Official MongoDB Node.js Driver');
+  if (isRealAtlas) {
+    console.log(' [MODE] LIVE TESTING: Connected to real MongoDB Atlas cluster');
+    console.log(` [URI]  Target database: ${config.mongodbDbName}`);
+  } else {
+    console.log(' [MODE] MOCK/IN-MEMORY TESTING: Using In-Memory Mock MongoDB Engine');
+    console.log(' [INFO] No MONGODB_URI supplied. Fast zero-dependency in-process test.');
+    console.log(' [NOTE] To test against a live Atlas cluster, set MONGODB_URI in your environment.');
+  }
   console.log('======================================================\n');
 
   try {
@@ -40,7 +52,7 @@ async function runTests() {
 
   // 1. Health Endpoint Tests
   console.log('[Suite 1: System Health & Diagnostics]');
-  await test('GET /api/health returns 200 with database health and x_mtts scope', async () => {
+  await test('GET /api/health returns 200 with MongoDB connection and x_mtts scope', async () => {
     const res = await fetch(`${BASE_URL}/api/health`);
     assert.strictEqual(res.status, 200);
     const data = await res.json();
@@ -48,11 +60,19 @@ async function runTests() {
     assert.strictEqual(data.scope, 'x_mtts');
     assert.strictEqual(data.database.connected, true);
     assert.strictEqual(data.database.status, 'healthy');
+    assert.strictEqual(data.database.dbName, config.mongodbDbName);
+    if (isRealAtlas) {
+      assert.strictEqual(data.database.engine, 'mongodb-atlas');
+      assert.strictEqual(data.database.mode, 'atlas-cluster');
+    } else {
+      assert.strictEqual(data.database.engine, 'mock-mongodb (in-memory document store)');
+      assert.strictEqual(data.database.mode, 'in-memory-mock');
+    }
   });
 
-  // 2. Master Data Endpoints
-  console.log('\n[Suite 2: Master Transit Data Endpoints]');
-  await test('GET /api/stations returns 9 canonical transit stations', async () => {
+  // 2. Master Transit Data Collections
+  console.log('\n[Suite 2: Master Transit Data Collections (MongoDB)]');
+  await test('GET /api/stations returns 9 canonical transit stations from stations collection', async () => {
     const res = await fetch(`${BASE_URL}/api/stations`);
     assert.strictEqual(res.status, 200);
     const data = await res.json();
@@ -62,7 +82,7 @@ async function runTests() {
     assert.strictEqual(data.stations[0].name, 'Central Terminus');
   });
 
-  await test('GET /api/routes returns route network pairs with distances', async () => {
+  await test('GET /api/routes returns route network documents with distances from routes collection', async () => {
     const res = await fetch(`${BASE_URL}/api/routes`);
     assert.strictEqual(res.status, 200);
     const data = await res.json();
@@ -95,7 +115,7 @@ async function runTests() {
     assert.strictEqual(data.totalFare, 10.5);
   });
 
-  await test('POST /api/fare/calculate enforces minimum tariff for short routes', async () => {
+  await test('POST /api/fare/calculate enforces minimum tariff for short routes ($10.00)', async () => {
     // Red Line short route: STN-06 to STN-07 (3.5 km * $2.50 = $8.75 < $10.00 min)
     const res = await fetch(`${BASE_URL}/api/fare/calculate`, {
       method: 'POST',
@@ -109,7 +129,7 @@ async function runTests() {
     });
     assert.strictEqual(res.status, 200);
     const data = await res.json();
-    assert.strictEqual(data.unitFare, 10.00); // Minimum fare applied
+    assert.strictEqual(data.unitFare, 10.00); // Minimum fare threshold applied
     assert.strictEqual(data.totalFare, 10.00);
   });
 
@@ -132,7 +152,7 @@ async function runTests() {
     assert.strictEqual(data.passengerCount, 2);
   });
 
-  await test('POST /api/fare/calculate applies flat tariff for Daily Pass', async () => {
+  await test('POST /api/fare/calculate applies flat tariff for Daily Pass ($50.00)', async () => {
     const res = await fetch(`${BASE_URL}/api/fare/calculate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -164,11 +184,12 @@ async function runTests() {
   });
 
   // 4. Booking Creation & Session Isolation
-  console.log('\n[Suite 4: Booking Creation & Session Isolation]');
+  console.log('\n[Suite 4: Booking Creation, MongoDB Documents & Session Isolation]');
   let createdBookingId = null;
   let createdTicketNumber = null;
+  let createdReference = null;
 
-  await test('POST /api/bookings creates booking in PostgreSQL with HMAC-SHA256 token', async () => {
+  await test('POST /api/bookings creates booking in MongoDB with HMAC-SHA256 token', async () => {
     const res = await fetch(`${BASE_URL}/api/bookings`, {
       method: 'POST',
       headers: {
@@ -199,6 +220,7 @@ async function runTests() {
 
     createdBookingId = data.booking.id;
     createdTicketNumber = data.booking.ticket_number;
+    createdReference = data.booking.booking_reference;
   });
 
   await test('GET /api/bookings enforces session isolation between visitors', async () => {
@@ -219,9 +241,67 @@ async function runTests() {
     assert.strictEqual(hasOtherBooking, false);
   });
 
-  // 5. Turnstile Hardware Verification
-  console.log('\n[Suite 5: Turnstile Scanner Verification Service]');
-  await test('POST /api/scanner/verify unlocks gate (OPEN) for valid issued ticket', async () => {
+  // 5. MongoDB Unique Constraints & Schema Integrity Tests
+  console.log('\n[Suite 5: MongoDB Unique Constraints & Index Enforcement]');
+  await test('MongoDB enforces unique constraint on booking_reference (duplicate rejected)', async () => {
+    const bookingsCol = getCollection('bookings');
+    let duplicateRejected = false;
+    try {
+      await bookingsCol.insertOne({
+        id: `bkg-dup-${Date.now()}`,
+        session_id: 'test-collision',
+        booking_reference: createdReference, // duplicate
+        ticket_number: `TKT-NEW-${Date.now()}`,
+        status: 'Ticket Issued'
+      });
+    } catch (err) {
+      if (err.code === 11000 || err.message.includes('duplicate key')) {
+        duplicateRejected = true;
+      }
+    }
+    assert.strictEqual(duplicateRejected, true);
+  });
+
+  await test('MongoDB enforces unique constraint on ticket_number (duplicate rejected)', async () => {
+    const bookingsCol = getCollection('bookings');
+    let duplicateRejected = false;
+    try {
+      await bookingsCol.insertOne({
+        id: `bkg-dup2-${Date.now()}`,
+        session_id: 'test-collision',
+        booking_reference: `MTTS-NEW-${Date.now()}`,
+        ticket_number: createdTicketNumber, // duplicate
+        status: 'Ticket Issued'
+      });
+    } catch (err) {
+      if (err.code === 11000 || err.message.includes('duplicate key')) {
+        duplicateRejected = true;
+      }
+    }
+    assert.strictEqual(duplicateRejected, true);
+  });
+
+  await test('MongoDB enforces unique constraint on station code (duplicate rejected)', async () => {
+    const stationsCol = getCollection('stations');
+    let duplicateRejected = false;
+    try {
+      await stationsCol.insertOne({
+        code: 'STN-01', // duplicate
+        name: 'Collision Central',
+        line_name: 'Blue Line',
+        active: true
+      });
+    } catch (err) {
+      if (err.code === 11000 || err.message.includes('duplicate key')) {
+        duplicateRejected = true;
+      }
+    }
+    assert.strictEqual(duplicateRejected, true);
+  });
+
+  // 6. Turnstile Scanner Hardware Verification & Document Updates
+  console.log('\n[Suite 6: Turnstile Scanner Verification & Atomic Updates]');
+  await test('POST /api/scanner/verify unlocks gate (OPEN) for valid issued ticket and increments scans_count', async () => {
     const res = await fetch(`${BASE_URL}/api/scanner/verify`, {
       method: 'POST',
       headers: {
@@ -242,6 +322,11 @@ async function runTests() {
     assert.strictEqual(data.scanEvent.http_code, 200);
     assert.ok(data.matchedBooking);
     assert.strictEqual(data.matchedBooking.ticket_number, createdTicketNumber);
+
+    // Verify scans_count incremented in MongoDB
+    const bookingsCol = getCollection('bookings');
+    const doc = await bookingsCol.findOne({ id: createdBookingId });
+    assert.strictEqual(doc.scans_count, 1);
   });
 
   await test('POST /api/scanner/verify locks gate (HOLD) for non-existent ticket (404)', async () => {
@@ -276,9 +361,9 @@ async function runTests() {
     assert.strictEqual(data.scanEvent.outcome, 'UNAUTHORIZED');
   });
 
-  // 6. Cancellation & Tariff Refund Policy
-  console.log('\n[Suite 6: Cancellation & Refund Quote Engine]');
-  await test('POST /api/bookings/:id/cancel issues 80% tariff refund and revokes ticket', async () => {
+  // 7. Cancellation & Tariff Refund Policy
+  console.log('\n[Suite 7: Cancellation, 80% Refund & MongoDB Document Updates]');
+  await test('POST /api/bookings/:id/cancel issues 80% tariff refund and revokes ticket in MongoDB', async () => {
     const res = await fetch(`${BASE_URL}/api/bookings/${createdBookingId}/cancel`, {
       method: 'POST',
       headers: {
@@ -296,6 +381,12 @@ async function runTests() {
     assert.strictEqual(data.booking.status, 'Cancelled');
     assert.strictEqual(data.refund.refundRate, 0.80);
     assert.ok(data.refund.refundAmount > 0);
+
+    // Verify document in MongoDB reflects Cancelled status
+    const bookingsCol = getCollection('bookings');
+    const doc = await bookingsCol.findOne({ id: createdBookingId });
+    assert.strictEqual(doc.status, 'Cancelled');
+    assert.strictEqual(doc.refund_status, 'PROCESSED');
   });
 
   await test('POST /api/bookings/:id/cancel rejects cancellation from unauthorized session (403)', async () => {
@@ -330,9 +421,9 @@ async function runTests() {
     assert.strictEqual(data.scanEvent.outcome, 'TICKET_CANCELLED_OR_INVALID');
   });
 
-  // 7. Audit Logging
-  console.log('\n[Suite 7: Turnstile Audit Event Log]');
-  await test('GET /api/scanner/events returns persistent scan audit events', async () => {
+  // 8. Audit Logging in MongoDB
+  console.log('\n[Suite 8: Turnstile Audit Event Log Persistence (MongoDB)]');
+  await test('GET /api/scanner/events returns scan audit documents from scan_events collection', async () => {
     const res = await fetch(`${BASE_URL}/api/scanner/events`);
     assert.strictEqual(res.status, 200);
     const data = await res.json();
@@ -346,6 +437,67 @@ async function runTests() {
   if (server) {
     server.close();
   }
+  await closeDb();
+
+  // 9. Production-Safety & Fail-Closed Invariant Verification
+  console.log('\n[Suite 9: Production-Safety & Fail-Closed Invariants]');
+  
+  await test('sanitizeMongoUri() masks plaintext passwords in Atlas connection strings', async () => {
+    const rawUri = 'mongodb+srv://admin_user:SuperSecretPassword123@cluster0.abcde.mongodb.net/mtts_transit_db?retryWrites=true';
+    const sanitized = sanitizeMongoUri(rawUri);
+    assert.strictEqual(sanitized.includes('SuperSecretPassword123'), false);
+    assert.strictEqual(sanitized, 'mongodb+srv://***:***@cluster0.abcde.mongodb.net/mtts_transit_db?retryWrites=true');
+  });
+
+  await test('Production fail-closed invariant: NODE_ENV=production without MONGODB_URI throws fatal error and rejects mock fallback', async () => {
+    const savedEnv = process.env.NODE_ENV;
+    const savedUri = config.mongodbUri;
+    process.env.NODE_ENV = 'production';
+    config.mongodbUri = '';
+    let fatalErrorCaught = false;
+    let thrownMessage = '';
+
+    try {
+      await connectDb();
+    } catch (err) {
+      fatalErrorCaught = true;
+      thrownMessage = err.message;
+    } finally {
+      process.env.NODE_ENV = savedEnv;
+      config.mongodbUri = savedUri;
+    }
+
+    assert.strictEqual(fatalErrorCaught, true, 'connectDb() must throw in production when MONGODB_URI is empty');
+    assert.ok(
+      thrownMessage.includes('[FATAL] Production database misconfiguration'),
+      `Expected fatal message but got: ${thrownMessage}`
+    );
+  });
+
+  await test('Production fail-closed invariant: Atlas connection failure in production throws fatal error and does NOT fall back to mock', async () => {
+    const savedEnv = process.env.NODE_ENV;
+    const savedUri = config.mongodbUri;
+    process.env.NODE_ENV = 'production';
+    config.mongodbUri = 'mongodb://127.0.0.1:59999/test?connectTimeoutMS=500&serverSelectionTimeoutMS=500';
+    let fatalErrorCaught = false;
+    let thrownMessage = '';
+
+    try {
+      await connectDb();
+    } catch (err) {
+      fatalErrorCaught = true;
+      thrownMessage = err.message;
+    } finally {
+      process.env.NODE_ENV = savedEnv;
+      config.mongodbUri = savedUri;
+    }
+
+    assert.strictEqual(fatalErrorCaught, true, 'connectDb() must throw on Atlas connection failure in production');
+    assert.ok(
+      thrownMessage.includes('[FATAL] Production MongoDB Atlas connection failure'),
+      `Expected fatal message but got: ${thrownMessage}`
+    );
+  });
 
   console.log('\n======================================================');
   console.log(` Test Summary: ${passed} passed, ${failed} failed (${passed + failed} total)`);

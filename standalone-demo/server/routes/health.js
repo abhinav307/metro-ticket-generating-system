@@ -1,13 +1,14 @@
 import express from 'express';
-import { query, getDb } from '../db/index.js';
+import { getDb, getDbInfo } from '../db/index.js';
 
 const router = express.Router();
 
 router.get('/', async (req, res, next) => {
   try {
-    const { isEmbedded } = getDb();
-    const dbTest = await query('SELECT 1 as alive');
-    const isDbAlive = dbTest.rows && dbTest.rows[0].alive === 1;
+    const { db } = getDb();
+    const dbInfo = getDbInfo();
+    const pingResult = await db.command({ ping: 1 });
+    const isDbAlive = pingResult && pingResult.ok === 1;
 
     res.json({
       status: 'ok',
@@ -17,7 +18,10 @@ router.get('/', async (req, res, next) => {
       timestamp: new Date().toISOString(),
       database: {
         connected: isDbAlive,
-        engine: isEmbedded ? 'embedded-postgresql (pg-mem)' : 'external-postgresql (pg)',
+        mode: dbInfo.mode,
+        engine: dbInfo.engine,
+        environment: dbInfo.environment,
+        dbName: db.databaseName,
         status: isDbAlive ? 'healthy' : 'degraded'
       },
       simulation_notice: 'Demonstration backend running with simulated ServiceNow Flow Designer and Turnstile API logic.'

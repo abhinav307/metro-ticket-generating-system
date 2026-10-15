@@ -1,24 +1,27 @@
 import express from 'express';
-import { query } from '../db/index.js';
+import { getCollection } from '../db/index.js';
 
 const router = express.Router();
 
-// GET /api/routes — List all active transit route pairs and distances
+// GET /api/routes — List all active transit route pairs and distances from MongoDB
 router.get('/', async (req, res, next) => {
   try {
-    const result = await query(
-      `SELECT r.id, r.origin_station_code, r.destination_station_code,
-              r.distance_km, r.line_name,
-              s1.name as origin_station_name, s2.name as destination_station_name
-       FROM routes r
-       JOIN stations s1 ON r.origin_station_code = s1.code
-       JOIN stations s2 ON r.destination_station_code = s2.code
-       WHERE r.active = true
-       ORDER BY r.id ASC`
-    );
+    const routesCol = getCollection('routes');
+    const docs = await routesCol.find({ active: true }).sort({ id: 1 }).toArray();
+
+    const routes = docs.map(r => ({
+      id: r.id,
+      origin_station_code: r.origin_station_code,
+      destination_station_code: r.destination_station_code,
+      distance_km: r.distance_km,
+      line_name: r.line_name,
+      origin_station_name: r.origin_station_name,
+      destination_station_name: r.destination_station_name
+    }));
+
     res.json({
-      routes: result.rows,
-      count: result.rows.length
+      routes,
+      count: routes.length
     });
   } catch (err) {
     next(err);
