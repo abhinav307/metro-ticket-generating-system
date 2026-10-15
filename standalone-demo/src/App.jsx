@@ -7,10 +7,12 @@ import ArchitectureView from './components/ArchitectureView';
 import WorkflowModal from './components/WorkflowModal';
 import TicketModal from './components/TicketModal';
 import { getBookings, executeBookingWorkflow } from './services/workflowSimulator';
+import { fetchBookings, createBookingApi, fetchHealth } from './services/api';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('book');
   const [bookings, setBookings] = useState(() => getBookings());
+  const [backendStatus, setBackendStatus] = useState(null);
   const [activeTicketModal, setActiveTicketModal] = useState(null);
   const [workflowState, setWorkflowState] = useState({
     isOpen: false,
@@ -20,12 +22,33 @@ export default function App() {
   });
   const [scannerPreselectedTicket, setScannerPreselectedTicket] = useState('');
 
-  // Reload bookings from storage
-  const refreshBookings = () => {
+  // Reload bookings from backend REST API (with localStorage fallback)
+  const refreshBookings = async () => {
+    try {
+      const data = await fetchBookings();
+      if (data && Array.isArray(data.bookings)) {
+        setBookings(data.bookings);
+        return;
+      }
+    } catch (err) {
+      console.warn('[MTTS] Could not fetch bookings from REST API, using local storage cache:', err.message);
+    }
     setBookings(getBookings());
   };
 
-  // Submit booking and trigger simulated Flow Designer
+  // Check backend health on initial mount
+  useEffect(() => {
+    fetchHealth()
+      .then(info => {
+        setBackendStatus(info);
+      })
+      .catch(err => {
+        setBackendStatus({ status: 'offline', error: err.message });
+      });
+    refreshBookings();
+  }, []);
+
+  // Submit booking and trigger simulated Flow Designer & REST API persistence
   const handleBookingSubmit = async (formData, calculation) => {
     setWorkflowState({
       isOpen: true,
@@ -35,20 +58,32 @@ export default function App() {
     });
 
     try {
-      const created = await executeBookingWorkflow(formData, calculation, (progress) => {
+      // Execute the simulated ServiceNow Flow Designer visual journey
+      const localBooking = await executeBookingWorkflow(formData, calculation, (progress) => {
         setWorkflowState(prev => ({
           ...prev,
           stepData: progress
         }));
       });
 
+      // Persist authoritatively via Express REST API to PostgreSQL
+      let savedBooking = localBooking;
+      try {
+        const apiRes = await createBookingApi(formData);
+        if (apiRes && apiRes.booking) {
+          savedBooking = apiRes.booking;
+        }
+      } catch (apiErr) {
+        console.warn('[MTTS] Backend API persistence failed, using local simulation result:', apiErr.message);
+      }
+
       setWorkflowState(prev => ({
         ...prev,
         isComplete: true,
-        createdBooking: created
+        createdBooking: savedBooking
       }));
 
-      refreshBookings();
+      await refreshBookings();
     } catch (err) {
       console.error('Workflow simulation error', err);
     }
@@ -81,6 +116,7 @@ export default function App() {
         activeTab={activeTab}
         setActiveTab={setActiveTab}
         bookingsCount={bookings.filter(b => b.status === 'Ticket Issued').length}
+        backendStatus={backendStatus}
       />
 
       {/* Main Content View */}
@@ -105,7 +141,7 @@ export default function App() {
         )}
 
         {activeTab === 'architecture' && (
-          <ArchitectureView />
+          <ArchitectureView backendStatus={backendStatus} />
         )}
       </main>
 
@@ -133,7 +169,7 @@ export default function App() {
             <strong>Metro Ticket Generating System (MTTS)</strong> &bull; Scoped Application <code>x_mtts</code>
           </div>
           <div>
-            Interactive Standalone Web Demo &bull; Deployable to Render Static Site
+            Full-Stack Web App &bull; Render Web Service + PostgreSQL Persistent Storage
           </div>
           <div>
             Repository: <a href="https://github.com/abhinav307/metro-ticket-generating-system" target="_blank" rel="noreferrer" style={{ color: '#38bdf8', textDecoration: 'none' }}>abhinav307/metro-ticket-generating-system</a>

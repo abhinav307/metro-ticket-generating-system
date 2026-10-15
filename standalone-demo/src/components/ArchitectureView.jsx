@@ -1,7 +1,10 @@
 import React from 'react';
 import { Layers, CheckCircle2, ShieldCheck, Database, GitBranch, Terminal, ExternalLink } from 'lucide-react';
 
-export default function ArchitectureView() {
+export default function ArchitectureView({ backendStatus }) {
+  const isHealthy = backendStatus?.status === 'ok';
+  const dbEngine = backendStatus?.database?.engine || 'PostgreSQL';
+
   const tables = [
     { name: 'x_mtts_station', purpose: 'Station Master (Codes, names, line zones, sequence order)' },
     { name: 'x_mtts_route', purpose: 'Route Network Matrix (Origin, destination, official track distance in km)' },
@@ -19,6 +22,18 @@ export default function ArchitectureView() {
     'MetroAuditRetentionService', 'MetroNotificationService', 'MetroDataMigrationService'
   ];
 
+  const apiEndpoints = [
+    { method: 'GET', path: '/api/health', desc: 'System health check, uptime, and database connectivity' },
+    { method: 'GET', path: '/api/stations', desc: 'Active transit station catalogue (Mirrors x_mtts_station)' },
+    { method: 'GET', path: '/api/routes', desc: 'Active track segments and route distance matrix (Mirrors x_mtts_route)' },
+    { method: 'POST', path: '/api/fare/calculate', desc: 'Authoritative server-side tariff & discount calculator' },
+    { method: 'GET', path: '/api/bookings', desc: 'Visitor session-isolated booking history' },
+    { method: 'POST', path: '/api/bookings', desc: 'Atomic booking creation and HMAC-SHA256 token minting' },
+    { method: 'POST', path: '/api/bookings/:id/cancel', desc: 'Ticket cancellation and 80% refund processing' },
+    { method: 'POST', path: '/api/scanner/verify', desc: 'Turnstile REST API gate verification (Mirrors /api/x_mtts/scanner/verify-ticket)' },
+    { method: 'GET', path: '/api/scanner/events', desc: 'Append-only turnstile audit log (Mirrors x_mtts_scan_event)' }
+  ];
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '28px' }}>
       {/* Banner */}
@@ -27,7 +42,7 @@ export default function ArchitectureView() {
           <div style={{ background: 'rgba(2, 132, 199, 0.2)', padding: '10px', borderRadius: '12px', color: '#38bdf8' }}>
             <Layers size={28} />
           </div>
-          <div>
+          <div style={{ flex: 1 }}>
             <h2 style={{ fontSize: '1.4rem', fontWeight: 800, color: '#fff' }}>
               ServiceNow Scoped Application Architecture: <code>x_mtts</code>
             </h2>
@@ -35,10 +50,16 @@ export default function ArchitectureView() {
               Verified Platform Implementation &bull; Status: <strong>GO — DEVELOPMENT VALIDATED, PRODUCTION PENDING</strong>
             </p>
           </div>
+          {isHealthy && (
+            <div style={{ background: 'rgba(34, 197, 94, 0.1)', border: '1px solid rgba(34, 197, 94, 0.3)', padding: '6px 14px', borderRadius: '20px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#22c55e' }}></span>
+              <span style={{ fontSize: '0.8rem', color: '#86efac', fontWeight: 600 }}>Backend Online ({dbEngine})</span>
+            </div>
+          )}
         </div>
 
         <div style={{ background: 'rgba(2, 132, 199, 0.08)', border: '1px solid rgba(2, 132, 199, 0.25)', borderRadius: '10px', padding: '16px', fontSize: '0.85rem', color: '#e2e8f0', lineHeight: 1.6 }}>
-          <strong>Notice on Demonstration Reality:</strong> This web application is a standalone interactive reference demonstration designed to showcase the transit ticketing, tariff calculations, approval workflows, QR ticket generation, and turnstile validation logic of the <strong>Metro Ticket Generating System in ServiceNow</strong>. All GlideRecord and Flow Designer actions run locally in an emulated browser engine. No live ServiceNow development instance is connected.
+          <strong>Notice on Demonstration Reality &amp; Full-Stack Architecture:</strong> This web application is a dynamic full-stack demonstration powered by a <strong>Node.js/Express REST API</strong> and <strong>PostgreSQL</strong> persistent storage. The business logic faithfully replicates the Scoped Application <code>x_mtts</code> algorithms (tariffs, cryptographic HMAC token hashes, turnstile REST validation, and 80% refund policies). While the Node.js/Express and PostgreSQL stack is real and live, the ServiceNow platform objects (GlideRecord, Flow Designer approvals, and turnstile gates) are simulated in this architecture. No live ServiceNow development instance is connected.
         </div>
       </div>
 
@@ -125,6 +146,55 @@ export default function ArchitectureView() {
               </span>
             ))}
           </div>
+        </div>
+      </div>
+
+      {/* Full-Stack REST API and PostgreSQL Engine */}
+      <div className="card">
+        <div className="card-header">
+          <h3>
+            <GitBranch size={20} className="text-emerald-400" />
+            <span>Full-Stack REST API &amp; PostgreSQL Persistent Engine</span>
+          </h3>
+          <span className="card-header-badge">Render Web Service Architecture</span>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '12px' }}>
+          {apiEndpoints.map((ep) => (
+            <div
+              key={ep.path + ep.method}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                padding: '10px 14px',
+                borderRadius: '8px',
+                background: 'var(--bg-input)',
+                border: '1px solid var(--border-color)'
+              }}
+            >
+              <span
+                style={{
+                  fontSize: '0.72rem',
+                  fontWeight: 700,
+                  padding: '2px 8px',
+                  borderRadius: '4px',
+                  background: ep.method === 'GET' ? 'rgba(56, 189, 248, 0.2)' : 'rgba(34, 197, 94, 0.2)',
+                  color: ep.method === 'GET' ? '#38bdf8' : '#4ade80'
+                }}
+              >
+                {ep.method}
+              </span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.82rem', fontWeight: 600, color: '#f1f5f9' }}>
+                  {ep.path}
+                </div>
+                <div style={{ fontSize: '0.74rem', color: '#94a3b8' }}>
+                  {ep.desc}
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
       </div>
 

@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { QrCode, ShieldAlert, CheckCircle2, XCircle, Clock, Radio, Activity, RefreshCw } from 'lucide-react';
 import { scanTicket, getScanEvents } from '../services/workflowSimulator';
+import { verifyTicketApi, fetchScanEvents } from '../services/api';
 
 export default function TurnstileScanner({ bookings, preselectedTicket }) {
   const [ticketInput, setTicketInput] = useState(preselectedTicket || '');
@@ -12,19 +13,70 @@ export default function TurnstileScanner({ bookings, preselectedTicket }) {
   const issuedBookings = bookings.filter(b => b.status === 'Ticket Issued');
   const cancelledBookings = bookings.filter(b => b.status === 'Cancelled');
 
-  const handleScan = (ticketToScan) => {
+  // Load persistent scan events from PostgreSQL backend on mount
+  const refreshScanHistory = async () => {
+    try {
+      const data = await fetchScanEvents();
+      if (data && Array.isArray(data.events)) {
+        setEvents(data.events);
+        return;
+      }
+    } catch (e) {
+      // offline fallback
+    }
+    setEvents(getScanEvents());
+  };
+
+  useEffect(() => {
+    refreshScanHistory();
+  }, []);
+
+  const handleScan = async (ticketToScan) => {
     const ticket = ticketToScan || ticketInput;
     if (!ticket) return;
 
-    const result = scanTicket(ticket, gateId);
-    setScanResult(result);
-    setEvents(getScanEvents());
+    try {
+      const res = await verifyTicketApi({
+        ticketNumber: ticket,
+        gateId,
+        stationCode: 'STN-01'
+      });
 
-    if (result.scanEvent.gate_status === 'OPEN') {
-      setIsGateOpen(true);
-      setTimeout(() => setIsGateOpen(false), 2400);
-    } else {
-      setIsGateOpen(false);
+      setScanResult({
+        scanEvent: res.scanEvent,
+        matchedBooking: res.matchedBooking
+      });
+      await refreshScanHistory();
+
+      if (res.scanEvent && res.scanEvent.gate_status === 'OPEN') {
+        setIsGateOpen(true);
+        setTimeout(() => setIsGateOpen(false), 2400);
+      } else {
+        setIsGateOpen(false);
+      }
+    } catch (err) {
+      if (err.data && err.data.scanEvent) {
+        setScanResult({
+          scanEvent: err.data.scanEvent,
+          matchedBooking: err.data.matchedBooking || null
+        });
+        await refreshScanHistory();
+        setIsGateOpen(false);
+        return;
+      }
+
+      // Offline fallback to local engine
+      console.warn('[MTTS] Turnstile scanner REST API unreachable, using local fallback:', err.message);
+      const result = scanTicket(ticket, gateId);
+      setScanResult(result);
+      setEvents(getScanEvents());
+
+      if (result.scanEvent.gate_status === 'OPEN') {
+        setIsGateOpen(true);
+        setTimeout(() => setIsGateOpen(false), 2400);
+      } else {
+        setIsGateOpen(false);
+      }
     }
   };
 

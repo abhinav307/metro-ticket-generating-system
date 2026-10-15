@@ -1,9 +1,11 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { ArrowLeftRight, Calendar, User, Mail, Users, Calculator, Shield, Sparkles, CheckCircle2 } from 'lucide-react';
 import { STATIONS, TICKET_TYPES } from '../data/transitData';
 import { calculateFare } from '../services/fareEngine';
+import { fetchStations } from '../services/api';
 
 export default function BookingForm({ onSubmitBooking }) {
+  const [stations, setStations] = useState(STATIONS);
   const [sourceCode, setSourceCode] = useState('STN-01');
   const [destCode, setDestCode] = useState('STN-05');
   const [travelDate, setTravelDate] = useState(() => {
@@ -13,6 +15,17 @@ export default function BookingForm({ onSubmitBooking }) {
   const [passengerCount, setPassengerCount] = useState(2);
   const [commuterName, setCommuterName] = useState('Alex Rivera');
   const [commuterEmail, setCommuterEmail] = useState('alex.rivera@metro.internal');
+
+  // Load transit stations from Express REST backend / PostgreSQL
+  useEffect(() => {
+    fetchStations()
+      .then(data => {
+        if (data && Array.isArray(data.stations) && data.stations.length > 0) {
+          setStations(data.stations);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   // Live dynamic fare calculation
   const fareResult = useMemo(() => {
@@ -73,7 +86,7 @@ export default function BookingForm({ onSubmitBooking }) {
                     onChange={(e) => setSourceCode(e.target.value)}
                     required
                   >
-                    {STATIONS.map((stn) => (
+                    {stations.map((stn) => (
                       <option key={`src-${stn.code}`} value={stn.code}>
                         {stn.name} ({stn.code}) — {stn.line} ({stn.zone})
                       </option>
@@ -102,7 +115,7 @@ export default function BookingForm({ onSubmitBooking }) {
                     onChange={(e) => setDestCode(e.target.value)}
                     required
                   >
-                    {STATIONS.map((stn) => (
+                    {stations.map((stn) => (
                       <option key={`dest-${stn.code}`} value={stn.code}>
                         {stn.name} ({stn.code}) — {stn.line} ({stn.zone})
                       </option>

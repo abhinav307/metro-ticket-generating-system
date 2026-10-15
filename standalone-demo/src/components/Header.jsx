@@ -1,15 +1,25 @@
 import React from 'react';
 import { Train, Ticket, ShieldCheck, QrCode, Layers, Info } from 'lucide-react';
 
-export default function Header({ activeTab, setActiveTab, bookingsCount }) {
+export default function Header({ activeTab, setActiveTab, bookingsCount, backendStatus }) {
+  const isBackendHealthy = backendStatus?.status === 'ok';
+
   return (
     <header className="app-header">
       {/* Simulation Disclaimer Banner */}
       <div className="demo-alert-banner">
-        <span className="demo-pill">Simulated Environment</span>
-        <span>
-          <strong>ServiceNow MTTS Standalone Demo</strong> — Scoped Application <code>x_mtts</code> emulation running in-browser (LocalStorage & Mock GlideRuntime). No live instance connected.
-        </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', width: '100%' }}>
+          <span className="demo-pill">Simulated Environment</span>
+          <span style={{ flex: 1 }}>
+            <strong>ServiceNow MTTS Full-Stack Demo</strong> — Scoped Application <code>x_mtts</code> emulation powered by Node.js/Express REST APIs &amp; PostgreSQL persistence. No live ServiceNow development instance is connected.
+          </span>
+          {isBackendHealthy && (
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '0.75rem', color: '#4ade80', whiteSpace: 'nowrap' }}>
+              <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#22c55e', display: 'inline-block' }}></span>
+              REST API &amp; {backendStatus.database?.engine?.includes('embedded') ? 'Embedded PostgreSQL' : 'PostgreSQL'} Active
+            </span>
+          )}
+        </div>
       </div>
 
       <div className="header-inner">

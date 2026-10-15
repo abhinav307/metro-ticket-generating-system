@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Ticket, QrCode, AlertTriangle, XCircle, Clock, CheckCircle2, RefreshCw, ChevronRight } from 'lucide-react';
 import { cancelBooking } from '../services/workflowSimulator';
+import { cancelBookingApi } from '../services/api';
 
 export default function BookingsList({ bookings, onSelectTicket, onBookingsUpdated }) {
   const [filter, setFilter] = useState('ALL');
@@ -21,16 +22,30 @@ export default function BookingsList({ bookings, onSelectTicket, onBookingsUpdat
     setCancelSuccessMsg('');
   };
 
-  const handleConfirmCancel = () => {
+  const handleConfirmCancel = async () => {
     if (!cancelModalBooking) return;
-    const res = cancelBooking(cancelModalBooking.id, cancelReason);
-    if (res.success) {
-      setCancelSuccessMsg(`Booking cancelled successfully. Refund of $${res.refundAmount.toFixed(2)} processed to original payment method.`);
-      if (onBookingsUpdated) onBookingsUpdated();
-      setTimeout(() => {
-        setCancelModalBooking(null);
-        setCancelSuccessMsg('');
-      }, 1800);
+    try {
+      const res = await cancelBookingApi(cancelModalBooking.id, cancelReason);
+      if (res && res.success) {
+        setCancelSuccessMsg(`Booking cancelled successfully. Refund of $${res.refund.refundAmount.toFixed(2)} processed to original payment method.`);
+        if (onBookingsUpdated) onBookingsUpdated();
+        setTimeout(() => {
+          setCancelModalBooking(null);
+          setCancelSuccessMsg('');
+        }, 1800);
+        return;
+      }
+    } catch (err) {
+      console.warn('[MTTS] REST API cancellation failed, applying local fallback:', err.message);
+      const res = cancelBooking(cancelModalBooking.id, cancelReason);
+      if (res.success) {
+        setCancelSuccessMsg(`Booking cancelled successfully. Refund of $${res.refundAmount.toFixed(2)} processed to original payment method.`);
+        if (onBookingsUpdated) onBookingsUpdated();
+        setTimeout(() => {
+          setCancelModalBooking(null);
+          setCancelSuccessMsg('');
+        }, 1800);
+      }
     }
   };
 
