@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<database>
+  <element label="Metro Route" name="x_mtts_route" type="collection">
+    <element label="Route ID" name="route_id" type="string" max_length="30" mandatory="true" read_only="false" unique="true" display="false" comments="Unique route identifier (e.g., RT-001)"/>
+    <element label="Origin Station" name="origin_station" type="reference" reference="x_mtts_station" mandatory="true" read_only="false" unique="false" display="false" comments="Origin station reference"/>
+    <element label="Destination Station" name="destination_station" type="reference" reference="x_mtts_station" mandatory="true" read_only="false" unique="false" display="false" comments="Destination station reference"/>
+    <element label="Distance (km)" name="distance_km" type="decimal" max_length="6" scale="2" mandatory="true" read_only="false" unique="false" display="false" comments="Journey distance in kilometers (&gt; 0.00 and &lt;= 500.00)"/>
+    <element label="Line Name" name="line_name" type="string" max_length="50" mandatory="false" read_only="false" unique="false" display="false" comments="Associated line name"/>
+    <element label="Active" name="active" type="boolean" default="true" mandatory="true" read_only="false" unique="false" display="false" comments="Route operational status"/>
+    <index name="idx_x_mtts_route_id" unique="true">
+      <element name="route_id"/>
+    </index>
+    <index name="idx_x_mtts_route_stations" unique="true">
+      <element name="origin_station"/>
+      <element name="destination_station"/>
+    </index>
+  </element>
+</database>

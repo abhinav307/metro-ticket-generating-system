@@ -1,0 +1,110 @@
+<main class="metro-hero-wrapper" role="main">
+  <!-- Hero Section -->
+  <section class="metro-hero-banner" aria-labelledby="hero-title">
+    <div class="metro-hero-content">
+      <span class="metro-tagline"><i class="fa fa-bolt" aria-hidden="true"></i> Fast, Reliable & Contactless</span>
+      <h1 id="hero-title" class="metro-hero-heading">Your Metro Journey Starts Here</h1>
+      <p class="metro-hero-subtext">
+        Choose your stations, review your fare, submit your booking, and access your digital ticket from one place.
+      </p>
+
+      <div class="metro-hero-actions">
+        <a href="?id=sc_cat_item&sys_id={{data.catItemSysId}}" class="btn btn-primary btn-lg metro-btn-primary" role="button">
+          <i class="fa fa-ticket" aria-hidden="true"></i> Book Metro Ticket
+        </a>
+        <a href="?id=my_metro_bookings" class="btn btn-secondary btn-lg metro-btn-secondary" role="button">
+          <i class="fa fa-qrcode" aria-hidden="true"></i> View My Bookings
+        </a>
+      </div>
+
+      <!-- Quick Metrics Bar -->
+      <div class="metro-metrics-bar" role="region" aria-label="Network Statistics">
+        <div class="metric-item">
+          <span class="metric-value">{{data.stationCount}}</span>
+          <span class="metric-label">Active Stations</span>
+        </div>
+        <div class="metric-divider" aria-hidden="true"></div>
+        <div class="metric-item">
+          <span class="metric-value">2</span>
+          <span class="metric-label">Transit Lines</span>
+        </div>
+        <div class="metric-divider" aria-hidden="true"></div>
+        <div class="metric-item">
+          <span class="metric-value">${{data.baseFare}}</span>
+          <span class="metric-label">Base Fare Starts</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- How It Works Section -->
+  <section class="metro-workflow-section" aria-labelledby="workflow-title">
+    <div class="section-container">
+      <div class="section-header text-center">
+        <h2 id="workflow-title" class="section-heading">How Metro Ticketing Works</h2>
+        <p class="section-subheading">A modern 5-step digital transit experience powered by ServiceNow</p>
+      </div>
+
+      <div class="workflow-steps-grid">
+        <div class="step-card">
+          <div class="step-badge" aria-hidden="true">1</div>
+          <div class="step-icon" aria-hidden="true">🚉</div>
+          <h3 class="step-title">Select Journey</h3>
+          <p class="step-desc">Pick your departure and destination stations, ticket type (Single, Return, or Pass), and travel date.</p>
+        </div>
+
+        <div class="step-card">
+          <div class="step-badge" aria-hidden="true">2</div>
+          <div class="step-icon" aria-hidden="true">📊</div>
+          <h3 class="step-title">Review Fare</h3>
+          <p class="step-desc">Instant real-time fare calculation with distance breakdowns and transparent minimum floors.</p>
+        </div>
+
+        <div class="step-card">
+          <div class="step-badge" aria-hidden="true">3</div>
+          <div class="step-icon" aria-hidden="true">📨</div>
+          <h3 class="step-title">Submit Request</h3>
+          <p class="step-desc">Submit your booking request. An authoritative booking reference is generated in Pending state.</p>
+        </div>
+
+        <div class="step-card">
+          <div class="step-badge" aria-hidden="true">4</div>
+          <div class="step-icon" aria-hidden="true">✅</div>
+          <h3 class="step-title">Approval Flow</h3>
+          <p class="step-desc">Automated workflow routes request to station approvers. Status is synchronized in real time.</p>
+        </div>
+
+        <div class="step-card">
+          <div class="step-badge" aria-hidden="true">5</div>
+          <div class="step-icon" aria-hidden="true">📱</div>
+          <h3 class="step-title">Digital QR Ticket</h3>
+          <p class="step-desc">Upon approval, a vector QR boarding pass is issued with an unguessable cryptographic token for turnstile scanning.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Network Overview Section -->
+  <section class="metro-network-summary" aria-labelledby="network-title">
+    <div class="section-container">
+      <div class="network-card">
+        <div class="network-info">
+          <h2 id="network-title">Integrated Metro Network</h2>
+          <p>
+            Connect across the <strong>Red Line</strong> (North-South corridor) and <strong>Blue Line</strong> (East-West corridor) through our central transfer hub at <strong>Central Square (STN-03)</strong>.
+          </p>
+          <ul class="line-pills" aria-label="Available Lines">
+            <li class="line-pill red-line"><span class="dot"></span> Red Line: North Terminal to Airport Express</li>
+            <li class="line-pill blue-line"><span class="dot"></span> Blue Line: West End to Tech City & Harbour</li>
+            <li class="line-pill hub-line"><span class="dot"></span> Interchange: Central Square (Transfer Station)</li>
+          </ul>
+        </div>
+        <div class="network-cta text-center">
+          <a href="?id=sc_cat_item&sys_id={{data.catItemSysId}}" class="btn btn-primary btn-block metro-btn-primary">
+            Plan Journey Now
+          </a>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>

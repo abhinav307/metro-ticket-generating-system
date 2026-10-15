@@ -1,0 +1,181 @@
+[
+  {
+    "type": "record",
+    "name": "x_mtts_station",
+    "operation": "read",
+    "roles": ["x_mtts.user", "snc_internal", "snc_external"],
+    "condition": "active=true",
+    "description": "Allows authenticated commuters and users to query active stations in catalog lookups."
+  },
+  {
+    "type": "record",
+    "name": "x_mtts_station",
+    "operation": "write",
+    "roles": ["x_mtts.admin"],
+    "description": "Restricted to Metro Administrators."
+  },
+  {
+    "type": "record",
+    "name": "x_mtts_station",
+    "operation": "create",
+    "roles": ["x_mtts.admin"],
+    "description": "Restricted to Metro Administrators."
+  },
+  {
+    "type": "record",
+    "name": "x_mtts_station",
+    "operation": "delete",
+    "roles": ["x_mtts.admin"],
+    "description": "Restricted to Metro Administrators (blocked if referenced by active routes)."
+  },
+  {
+    "type": "record",
+    "name": "x_mtts_route",
+    "operation": "read",
+    "roles": ["x_mtts.user", "snc_internal", "snc_external"],
+    "condition": "active=true",
+    "description": "Allows reading routes for fare calculation."
+  },
+  {
+    "type": "record",
+    "name": "x_mtts_route",
+    "operation": "write",
+    "roles": ["x_mtts.admin"],
+    "description": "Restricted to Metro Administrators."
+  },
+  {
+    "type": "record",
+    "name": "x_mtts_ticket_type",
+    "operation": "read",
+    "roles": ["x_mtts.user", "snc_internal", "snc_external"],
+    "condition": "active=true",
+    "description": "Allows commuters to select active ticket types."
+  },
+  {
+    "type": "record",
+    "name": "x_mtts_ticket_type",
+    "operation": "write",
+    "roles": ["x_mtts.admin"],
+    "description": "Restricted to Metro Administrators."
+  },
+  {
+    "type": "record",
+    "name": "x_mtts_fare_rule",
+    "operation": "read",
+    "roles": ["x_mtts.admin", "x_mtts.approver"],
+    "description": "Fulfillers and admins can review rules; system reads via server script."
+  },
+  {
+    "type": "record",
+    "name": "x_mtts_fare_rule",
+    "operation": "write",
+    "roles": ["x_mtts.admin"],
+    "description": "Restricted to Metro Administrators."
+  },
+  {
+    "type": "record",
+    "name": "x_mtts_booking_ticket",
+    "operation": "read",
+    "roles": ["x_mtts.user", "snc_internal", "snc_external"],
+    "script": "answer = (gs.hasRole('x_mtts.admin') || gs.hasRole('x_mtts.approver') || current.passenger == gs.getUserID());",
+    "description": "Row-level protection: Commuters can only view their own bookings."
+  },
+  {
+    "type": "record",
+    "name": "x_mtts_booking_ticket",
+    "operation": "create",
+    "roles": ["x_mtts.user", "snc_internal", "snc_external"],
+    "description": "Allowed via Service Catalog submission process."
+  },
+  {
+    "type": "record",
+    "name": "x_mtts_booking_ticket",
+    "operation": "write",
+    "roles": ["x_mtts.admin"],
+    "description": "Direct writes restricted to admin; state updates managed by Flow Designer."
+  },
+  {
+    "type": "record",
+    "name": "x_mtts_daily_sequence",
+    "operation": "read",
+    "roles": ["x_mtts.admin"],
+    "description": "Internal technical sequence counter. Denied to commuters and approvers."
+  },
+  {
+    "type": "record",
+    "name": "x_mtts_daily_sequence",
+    "operation": "write",
+    "roles": ["x_mtts.admin"],
+    "description": "Internal technical sequence counter. Mutated exclusively by system allocator."
+  },
+  {
+    "type": "record_field",
+    "name": "x_mtts_booking_ticket.total_fare",
+    "operation": "write",
+    "roles": ["admin"],
+    "description": "Read-only to users/approvers; calculated and locked by server."
+  },
+  {
+    "type": "record_field",
+    "name": "x_mtts_booking_ticket.unit_fare",
+    "operation": "write",
+    "roles": ["admin"],
+    "description": "Read-only to users/approvers; calculated and locked by server."
+  },
+  {
+    "type": "record_field",
+    "name": "x_mtts_booking_ticket.calculated_distance",
+    "operation": "write",
+    "roles": ["admin"],
+    "description": "Read-only to users/approvers; snapshotted by server."
+  },
+  {
+    "type": "record_field",
+    "name": "x_mtts_booking_ticket.ticket_number",
+    "operation": "write",
+    "roles": ["admin"],
+    "description": "Immutable once allocated by fulfillment engine."
+  },
+  {
+    "type": "record_field",
+    "name": "x_mtts_booking_ticket.qr_token_hash",
+    "operation": "write",
+    "roles": ["admin"],
+    "description": "Cryptographic verification token digest. System-only write protection."
+  },
+  {
+    "type": "record",
+    "name": "x_mtts_scan_event",
+    "operation": "read",
+    "roles": ["x_mtts.admin"],
+    "description": "Turnstile scan event history. Restricted strictly to administrators; denied to passengers and station approvers."
+  },
+  {
+    "type": "record",
+    "name": "x_mtts_scan_event",
+    "operation": "create",
+    "roles": ["x_mtts.scanner", "x_mtts.admin"],
+    "description": "Allows scanner service accounts and admin workflows to record audit verification events."
+  },
+  {
+    "type": "record",
+    "name": "x_mtts_scan_event",
+    "operation": "write",
+    "roles": ["admin"],
+    "description": "Scan events are immutable audit records; updates denied to scanners and general staff."
+  },
+  {
+    "type": "record",
+    "name": "x_mtts_scan_event",
+    "operation": "delete",
+    "roles": ["admin"],
+    "description": "Deletions restricted to system maintenance and automated table cleaning retention rules."
+  },
+  {
+    "type": "rest_endpoint",
+    "name": "x_mtts_scanner_verify_ticket",
+    "operation": "execute",
+    "roles": ["x_mtts.scanner", "x_mtts.admin"],
+    "description": "Protects Scripted REST API endpoint POST /api/x_mtts/scanner/verify-ticket from unauthorized access."
+  }
+]

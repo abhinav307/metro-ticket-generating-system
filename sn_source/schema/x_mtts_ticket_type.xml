@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<database>
+  <element label="Metro Ticket Type" name="x_mtts_ticket_type" type="collection">
+    <element label="Code" name="code" type="string" max_length="20" mandatory="true" read_only="false" unique="true" display="false" comments="Ticket type unique code (SINGLE, RETURN, PASS)"/>
+    <element label="Name" name="name" type="string" max_length="50" mandatory="true" read_only="false" unique="false" display="true" comments="Display name for commuters"/>
+    <element label="Pricing Model" name="pricing_model" type="choice" max_length="30" mandatory="true" read_only="false" unique="false" display="false" comments="Pricing calculation model">
+      <choice value="Distance_Based" label="Distance Based" sequence="1"/>
+      <choice value="Fixed" label="Fixed Fare" sequence="2"/>
+    </element>
+    <element label="Validity (Hours)" name="validity_hours" type="integer" mandatory="true" read_only="false" unique="false" display="false" comments="Operational travel validity window in hours"/>
+    <element label="Active" name="active" type="boolean" default="true" mandatory="true" read_only="false" unique="false" display="false" comments="Active status"/>
+    <index name="idx_x_mtts_ticket_type_code" unique="true">
+      <element name="code"/>
+    </index>
+  </element>
+</database>

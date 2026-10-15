@@ -1,0 +1,272 @@
+.metro-hero-wrapper {
+  background: #F7FAFC;
+  min-height: calc(100vh - 80px);
+  padding-bottom: 3rem;
+
+  .metro-hero-banner {
+    background: linear-gradient(135deg, #1A365D 0%, #2A4365 50%, #2B6CB0 100%);
+    color: #FFFFFF;
+    padding: 4rem 1.5rem 3.5rem;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+
+    &::after {
+      content: "";
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 20px;
+      background: radial-gradient(circle, transparent 20%, #F7FAFC 21%);
+      background-size: 20px 20px;
+      opacity: 0.15;
+    }
+
+    .metro-hero-content {
+      max-width: 850px;
+      margin: 0 auto;
+    }
+
+    .metro-tagline {
+      display: inline-block;
+      background: rgba(49, 130, 206, 0.4);
+      color: #90CDF4;
+      font-size: 0.85rem;
+      font-weight: 700;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      padding: 0.35rem 0.9rem;
+      border-radius: 20px;
+      margin-bottom: 1.25rem;
+      border: 1px solid rgba(144, 205, 244, 0.3);
+    }
+
+    .metro-hero-heading {
+      font-size: 2.75rem;
+      font-weight: 800;
+      line-height: 1.15;
+      margin-bottom: 1.25rem;
+      color: #FFFFFF;
+    }
+
+    .metro-hero-subtext {
+      font-size: 1.2rem;
+      color: #E2E8F0;
+      line-height: 1.6;
+      margin-bottom: 2rem;
+    }
+
+    .metro-hero-actions {
+      display: flex;
+      justify-content: center;
+      gap: 1rem;
+      flex-wrap: wrap;
+      margin-bottom: 2.5rem;
+
+      .metro-btn-primary {
+        background: #3182CE;
+        border-color: #3182CE;
+        color: #FFFFFF;
+        font-weight: 600;
+        padding: 0.8rem 1.75rem;
+        border-radius: 8px;
+        box-shadow: 0 4px 14px rgba(49, 130, 206, 0.4);
+        transition: all 0.2s;
+
+        &:hover {
+          background: #2B6CB0;
+          transform: translateY(-1px);
+        }
+      }
+
+      .metro-btn-secondary {
+        background: transparent;
+        border: 2px solid #E2E8F0;
+        color: #FFFFFF;
+        font-weight: 600;
+        padding: 0.8rem 1.75rem;
+        border-radius: 8px;
+
+        &:hover {
+          background: rgba(255, 255, 255, 0.1);
+        }
+      }
+    }
+
+    .metro-metrics-bar {
+      display: inline-flex;
+      background: rgba(26, 32, 44, 0.45);
+      backdrop-filter: blur(8px);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 12px;
+      padding: 0.75rem 2rem;
+      align-items: center;
+      gap: 1.5rem;
+
+      .metric-item {
+        display: flex;
+        flex-direction: column;
+
+        .metric-value {
+          font-size: 1.5rem;
+          font-weight: 700;
+          color: #63B3ED;
+        }
+
+        .metric-label {
+          font-size: 0.75rem;
+          color: #CBD5E0;
+          text-transform: uppercase;
+        }
+      }
+
+      .metric-divider {
+        width: 1px;
+        height: 35px;
+        background: rgba(255, 255, 255, 0.2);
+      }
+    }
+  }
+
+  .section-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 3rem 1.5rem 0;
+  }
+
+  .section-header {
+    margin-bottom: 2.5rem;
+
+    .section-heading {
+      font-size: 2rem;
+      font-weight: 700;
+      color: #2D3748;
+    }
+
+    .section-subheading {
+      font-size: 1rem;
+      color: #718096;
+    }
+  }
+
+  .workflow-steps-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+    gap: 1.25rem;
+
+    .step-card {
+      background: #FFFFFF;
+      border: 1px solid #E2E8F0;
+      border-radius: 12px;
+      padding: 1.5rem 1.25rem;
+      position: relative;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04);
+      transition: all 0.2s;
+
+      &:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 8px 16px rgba(0, 0, 0, 0.08);
+        border-color: #CBD5E0;
+      }
+
+      .step-badge {
+        position: absolute;
+        top: 1rem;
+        right: 1rem;
+        background: #EDF2F7;
+        color: #4A5568;
+        font-size: 0.8rem;
+        font-weight: 700;
+        width: 24px;
+        height: 24px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .step-icon {
+        font-size: 2.25rem;
+        margin-bottom: 1rem;
+      }
+
+      .step-title {
+        font-size: 1.1rem;
+        font-weight: 700;
+        color: #2D3748;
+        margin-bottom: 0.5rem;
+      }
+
+      .step-desc {
+        font-size: 0.85rem;
+        color: #718096;
+        line-height: 1.5;
+        margin: 0;
+      }
+    }
+  }
+
+  .metro-network-summary {
+    .network-card {
+      background: #FFFFFF;
+      border: 1px solid #E2E8F0;
+      border-radius: 12px;
+      padding: 2rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 2rem;
+      flex-wrap: wrap;
+
+      .network-info {
+        flex: 1;
+
+        h2 {
+          font-size: 1.5rem;
+          font-weight: 700;
+          color: #2D3748;
+          margin-bottom: 0.5rem;
+        }
+
+        p {
+          color: #4A5568;
+          margin-bottom: 1rem;
+        }
+
+        .line-pills {
+          list-style: none;
+          padding: 0;
+          margin: 0;
+          display: flex;
+          flex-direction: column;
+          gap: 0.5rem;
+
+          .line-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.9rem;
+            color: #2D3748;
+
+            .dot {
+              width: 10px;
+              height: 10px;
+              border-radius: 50%;
+            }
+
+            &.red-line .dot { background: #E53E3E; }
+            &.blue-line .dot { background: #3182CE; }
+            &.hub-line .dot { background: #805AD5; }
+          }
+        }
+      }
+    }
+  }
+}
+
+@media (max-width: 768px) {
+  .metro-hero-wrapper .metro-hero-banner .metro-hero-heading {
+    font-size: 2rem;
+  }
+}

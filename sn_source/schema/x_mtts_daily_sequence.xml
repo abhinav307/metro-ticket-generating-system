@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<database>
+  <element label="Metro Daily Ticket Sequence" name="x_mtts_daily_sequence" type="collection">
+    <element label="Date Key" name="date_key" type="string" max_length="8" mandatory="true" read_only="true" unique="true" display="true" comments="Calendar partition key in YYYYMMDD format"/>
+    <element label="Last Sequence" name="last_sequence" type="integer" default="0" mandatory="true" read_only="false" unique="false" display="false" comments="Last allocated integer sequence for the date partition"/>
+    <element label="Updated On" name="sys_updated_on" type="glide_date_time" mandatory="false" read_only="true" unique="false" display="false" comments="System updated timestamp"/>
+    <index name="idx_x_mtts_seq_date" unique="true">
+      <element name="date_key"/>
+    </index>
+  </element>
+</database>

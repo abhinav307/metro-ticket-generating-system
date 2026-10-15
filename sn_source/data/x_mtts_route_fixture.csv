@@ -1,0 +1,18 @@
+route_id,origin_station_code,destination_station_code,distance_km,line_name,active
+RT-001,STN-01,STN-02,4.20,Blue Line,true
+RT-002,STN-02,STN-01,4.20,Blue Line,true
+RT-003,STN-01,STN-03,8.50,Blue Line,true
+RT-004,STN-03,STN-01,8.50,Blue Line,true
+RT-005,STN-01,STN-05,14.20,Blue Line,true
+RT-006,STN-05,STN-01,14.20,Blue Line,true
+RT-007,STN-02,STN-04,7.80,Blue Line,true
+RT-008,STN-04,STN-02,7.80,Blue Line,true
+RT-009,STN-06,STN-07,3.50,Red Line,true
+RT-010,STN-07,STN-06,3.50,Red Line,true
+RT-011,STN-06,STN-08,9.10,Red Line,true
+RT-012,STN-08,STN-06,9.10,Red Line,true
+RT-013,STN-07,STN-09,11.40,Red Line,true
+RT-014,STN-09,STN-07,11.40,Red Line,true
+RT-015,STN-01,STN-08,18.60,Inter-Line Transfer,true
+RT-INACT-01,STN-03,STN-04,6.00,Blue Line,false
+RT-INACT-STN,STN-01,STN-99,5.00,Special Line,true

@@ -1,0 +1,238 @@
+<div class="my-bookings-container" role="main" aria-labelledby="bookings-heading">
+  <div class="page-header-bar">
+    <div>
+      <h1 id="bookings-heading" class="page-title">My Bookings & Digital Tickets</h1>
+      <p class="page-subtitle">Track your booking status, view digital boarding passes, and manage travel.</p>
+    </div>
+    <div class="header-action">
+      <a href="?id=sc_cat_item&sys_id={{data.catItemSysId}}" class="btn btn-primary metro-btn">
+        <i class="fa fa-plus" aria-hidden="true"></i> Book New Ticket
+      </a>
+    </div>
+  </div>
+
+  <!-- Search & Filter Controls -->
+  <div class="controls-card">
+    <div class="search-box">
+      <i class="fa fa-search search-icon" aria-hidden="true"></i>
+      <input type="text"
+             class="form-control"
+             placeholder="Search by Booking Reference (BKG-...) or Ticket Number (TKT-...)"
+             ng-model="c.searchQuery"
+             ng-change="c.onSearchChange()"
+             aria-label="Search bookings">
+    </div>
+
+    <div class="status-filters" role="group" aria-label="Filter bookings by status">
+      <button type="button" class="btn filter-btn" ng-class="{'active': c.selectedStatus === 'ALL'}" ng-click="c.setStatusFilter('ALL')">All ({{data.bookings.length}})</button>
+      <button type="button" class="btn filter-btn" ng-class="{'active': c.selectedStatus === 'Generated'}" ng-click="c.setStatusFilter('Generated')">Tickets Ready</button>
+      <button type="button" class="btn filter-btn" ng-class="{'active': c.selectedStatus === 'Pending'}" ng-click="c.setStatusFilter('Pending')">Pending</button>
+      <button type="button" class="btn filter-btn" ng-class="{'active': c.selectedStatus === 'Approved'}" ng-click="c.setStatusFilter('Approved')">Approved</button>
+      <button type="button" class="btn filter-btn" ng-class="{'active': c.selectedStatus === 'Cancelled'}" ng-click="c.setStatusFilter('Cancelled')">Cancelled</button>
+    </div>
+  </div>
+
+  <!-- Booking Cards List -->
+  <div class="bookings-grid" ng-if="c.filteredBookings.length > 0">
+    <article class="booking-card" ng-repeat="item in c.filteredBookings track by item.sys_id" ng-class="'status-' + item.status.toLowerCase()">
+      <div class="card-top-row">
+        <div class="booking-ref-block">
+          <span class="ref-label">Booking Reference</span>
+          <span class="ref-value">{{item.booking_reference}}</span>
+        </div>
+        <div class="status-pill-wrap">
+          <span class="status-pill" ng-class="item.is_administrative_rejection ? 'pill-declined' : 'pill-' + item.status.toLowerCase()">
+            <i class="fa" ng-class="{
+              'fa-qrcode': item.status === 'Generated',
+              'fa-clock-o': item.status === 'Pending',
+              'fa-check-circle': item.status === 'Approved',
+              'fa-ban': item.status === 'Cancelled' && !item.is_administrative_rejection,
+              'fa-times-circle': item.is_administrative_rejection
+            }" aria-hidden="true"></i>
+            {{item.status === 'Generated' ? 'Ticket Ready' : (item.is_administrative_rejection ? 'Declined (Admin)' : item.status)}}
+          </span>
+        </div>
+      </div>
+
+      <div class="journey-route-block">
+        <div class="station-leg">
+          <span class="leg-label">From</span>
+          <span class="station-name">{{item.source_station}}</span>
+        </div>
+        <div class="route-arrow" aria-hidden="true">
+          <span>➔</span>
+          <span class="distance-pill" ng-if="item.calculated_distance > 0">{{item.calculated_distance}} km</span>
+        </div>
+        <div class="station-leg">
+          <span class="leg-label">To</span>
+          <span class="station-name">{{item.destination_station}}</span>
+        </div>
+      </div>
+
+      <div class="card-details-grid">
+        <div class="detail-cell">
+          <span class="d-label">Ticket Type</span>
+          <span class="d-val">{{item.ticket_type}}</span>
+        </div>
+        <div class="detail-cell">
+          <span class="d-label">Travel Date</span>
+          <span class="d-val">{{item.travel_date}}</span>
+        </div>
+        <div class="detail-cell">
+          <span class="d-label">Passengers</span>
+          <span class="d-val">{{item.passenger_count}}</span>
+        </div>
+        <div class="detail-cell">
+          <span class="d-label">Total Fare</span>
+          <span class="d-val fare-highlight">${{item.total_fare}}</span>
+        </div>
+      </div>
+
+      <div class="ticket-number-bar" ng-if="item.status === 'Generated'">
+        <i class="fa fa-ticket" aria-hidden="true"></i>
+        <span>Ticket #: <strong>{{item.ticket_number}}</strong></span>
+      </div>
+
+      <div class="card-actions-bar">
+        <button type="button" class="btn btn-outline-primary btn-sm" ng-click="c.openDetails(item)">
+          <i class="fa" ng-class="item.status === 'Generated' ? 'fa-qrcode' : 'fa-info-circle'" aria-hidden="true"></i>
+          {{item.status === 'Generated' ? 'View QR Ticket' : 'View Details'}}
+        </button>
+
+        <button type="button"
+                class="btn btn-outline-danger btn-sm"
+                ng-if="item.status !== 'Cancelled'"
+                ng-click="c.openCancel(item)">
+          <i class="fa fa-times" aria-hidden="true"></i> Cancel Booking
+        </button>
+
+        <span class="cancelled-notice text-danger" ng-if="item.status === 'Cancelled' && item.is_administrative_rejection">
+          <i class="fa fa-times-circle" aria-hidden="true"></i> Declined by Operations: {{item.cancellation_reason}}
+        </span>
+        <span class="cancelled-notice" ng-if="item.status === 'Cancelled' && !item.is_administrative_rejection">
+          Cancelled <span ng-if="item.refund_amount > 0">(Refund: ${{item.refund_amount}})</span>
+        </span>
+      </div>
+    </article>
+  </div>
+
+  <!-- Empty State -->
+  <div class="empty-state-card text-center" ng-if="c.filteredBookings.length === 0">
+    <div class="empty-icon" aria-hidden="true">🎫</div>
+    <h3>No bookings found</h3>
+    <p ng-if="c.searchQuery">No matching bookings match "{{c.searchQuery}}". Try clearing the search filter.</p>
+    <p ng-if="!c.searchQuery">You have no active metro bookings at this time.</p>
+    <a href="?id=sc_cat_item&sys_id={{data.catItemSysId}}" class="btn btn-primary metro-btn mt-3">
+      Book Your First Metro Ticket
+    </a>
+  </div>
+
+  <!-- Digital Ticket Modal (Embedded) -->
+  <div class="metro-modal-backdrop" ng-if="c.activeModal === 'TICKET'" role="dialog" aria-modal="true" aria-labelledby="ticket-modal-title">
+    <div class="metro-modal-dialog">
+      <div class="ticket-pass-card">
+        <div class="ticket-pass-header" ng-class="'bg-' + c.modalItem.status.toLowerCase()">
+          <div class="d-flex justify-content-between align-items-center">
+            <span class="pass-brand">🚇 MetroRail Express</span>
+            <span class="pass-status">{{c.modalItem.status}}</span>
+          </div>
+          <h2 id="ticket-modal-title" class="pass-ticket-num">{{c.modalItem.ticket_number || c.modalItem.booking_reference}}</h2>
+        </div>
+
+        <div class="ticket-pass-body">
+          <div class="route-display text-center">
+            <div class="route-line">{{c.modalItem.source_station}} ➔ {{c.modalItem.destination_station}}</div>
+            <div class="route-sub">{{c.modalItem.ticket_type}} &bull; {{c.modalItem.passenger_count}} Passenger(s)</div>
+          </div>
+
+          <div class="pass-metadata-row">
+            <div>
+              <span class="m-label">Travel Date</span>
+              <span class="m-val">{{c.modalItem.travel_date}}</span>
+            </div>
+            <div>
+              <span class="m-label">Total Fare</span>
+              <span class="m-val">${{c.modalItem.total_fare}}</span>
+            </div>
+            <div>
+              <span class="m-label">Booking Ref</span>
+              <span class="m-val">{{c.modalItem.booking_reference}}</span>
+            </div>
+          </div>
+
+          <!-- QR Code Display Area -->
+          <div class="qr-code-section text-center" ng-if="c.modalItem.ticketReady && c.modalSvg">
+            <div class="qr-svg-holder" ng-bind-html="c.trustedSvg" aria-label="Digital Ticket QR Code"></div>
+            <p class="qr-instruction">Scan this vector QR code at turnstile gate scanners.</p>
+          </div>
+
+          <!-- Pending or Non-Generated Notice -->
+          <div class="pending-notice-section text-center" ng-if="!c.modalItem.ticketReady">
+            <div class="notice-icon" aria-hidden="true">⏳</div>
+            <h4>{{c.modalItem.status}}</h4>
+            <p class="text-muted">{{c.modalItem.statusMessage}}</p>
+          </div>
+        </div>
+
+        <div class="ticket-pass-footer text-right">
+          <button type="button" class="btn btn-secondary" ng-click="c.closeModal()">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Cancellation & Policy Gate Modal (Embedded) -->
+  <div class="metro-modal-backdrop" ng-if="c.activeModal === 'CANCEL'" role="dialog" aria-modal="true" aria-labelledby="cancel-modal-title">
+    <div class="metro-modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header bg-danger text-white">
+          <h3 id="cancel-modal-title" class="modal-title">Cancel Metro Booking</h3>
+          <button type="button" class="close text-white" ng-click="c.closeModal()" aria-label="Close">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div class="booking-cancel-summary">
+            <p><strong>Booking Reference:</strong> {{c.cancelTarget.booking_reference}}</p>
+            <p><strong>Route:</strong> {{c.cancelTarget.source_station}} ➔ {{c.cancelTarget.destination_station}}</p>
+            <p><strong>Scheduled Travel Date:</strong> {{c.cancelTarget.travel_date}}</p>
+            <p><strong>Original Total Fare:</strong> ${{c.cancelTarget.total_fare}}</p>
+          </div>
+
+          <!-- Policy Gate Evaluation -->
+          <div class="policy-gate-card alert alert-warning" ng-if="!data.cancellationPolicyConfigured">
+            <h5><i class="fa fa-exclamation-triangle"></i> Cancellation Policy Notice</h5>
+            <p>
+              Cancellation is currently unavailable because the operational refund schedule is pending formal stakeholder policy approval.
+            </p>
+            <p class="mb-0 small text-muted">
+              System Property <code>x_mtts.cancellation.policy_status</code> is currently unconfigured.
+            </p>
+          </div>
+
+          <div class="policy-active-card alert alert-info" ng-if="data.cancellationPolicyConfigured">
+            <h5><i class="fa fa-info-circle"></i> Estimated Refund Breakdown</h5>
+            <p>Based on our active cancellation schedule, cancelling now yields:</p>
+            <ul>
+              <li><strong>Eligible Refund Rate:</strong> {{c.cancelQuote.refundPercentage}}%</li>
+              <li><strong>Estimated Refund Amount:</strong> ${{c.cancelQuote.refundAmount}}</li>
+            </ul>
+            <p class="small text-muted mb-0">Note: Cancellation is permanent and immediately revokes turnstile boarding privileges.</p>
+          </div>
+
+          <div class="alert alert-danger" ng-if="c.cancelError">
+            {{c.cancelError}}
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" ng-click="c.closeModal()">Keep Booking</button>
+          <button type="button"
+                  class="btn btn-danger"
+                  ng-disabled="!data.cancellationPolicyConfigured || c.cancellingInProgress"
+                  ng-click="c.executeCancellation()">
+            <span ng-if="!c.cancellingInProgress">Confirm Cancellation</span>
+            <span ng-if="c.cancellingInProgress">Processing...</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

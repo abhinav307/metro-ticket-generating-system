@@ -1,0 +1,127 @@
+.confirmation-wrapper {
+  max-width: 680px;
+  margin: 3rem auto;
+  padding: 0 1.5rem;
+
+  .confirmation-card {
+    background: #FFFFFF;
+    border: 1px solid #E2E8F0;
+    border-radius: 16px;
+    padding: 3rem 2rem;
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.08);
+
+    .success-badge-icon {
+      width: 70px;
+      height: 70px;
+      background: #FEF08A;
+      color: #854D0E;
+      border-radius: 50%;
+      font-size: 2.25rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 1.25rem;
+      box-shadow: 0 4px 10px rgba(133, 77, 14, 0.15);
+    }
+
+    .status-indicator-tag {
+      display: inline-block;
+      background: #FEF9C3;
+      color: #713F12;
+      font-size: 0.8rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      padding: 0.25rem 0.75rem;
+      border-radius: 20px;
+      margin-bottom: 0.75rem;
+    }
+
+    .conf-title {
+      font-size: 1.75rem;
+      font-weight: 800;
+      color: #1A365D;
+      margin-bottom: 0.75rem;
+    }
+
+    .conf-lead {
+      color: #4A5568;
+      font-size: 1.05rem;
+      margin-bottom: 2rem;
+    }
+
+    .booking-ref-box {
+      background: #F8FAFC;
+      border: 2px dashed #CBD5E0;
+      border-radius: 10px;
+      padding: 1.25rem;
+      margin-bottom: 2rem;
+      display: flex;
+      flex-direction: column;
+
+      .box-label {
+        font-size: 0.8rem;
+        color: #718096;
+        text-transform: uppercase;
+        font-weight: 700;
+      }
+
+      .box-ref {
+        font-family: monospace;
+        font-size: 1.5rem;
+        font-weight: 800;
+        color: #2B6CB0;
+      }
+    }
+
+    .summary-table-wrap {
+      margin-bottom: 2rem;
+
+      .summary-table {
+        margin: 0;
+
+        th {
+          color: #718096;
+          font-weight: 600;
+          border-top: 1px solid #EDF2F7;
+          width: 45%;
+        }
+
+        td {
+          color: #2D3748;
+          font-weight: 700;
+          border-top: 1px solid #EDF2F7;
+
+          &.fare-total {
+            color: #2B6CB0;
+            font-size: 1.2rem;
+          }
+        }
+      }
+    }
+
+    .advisory-alert {
+      font-size: 0.9rem;
+      margin-bottom: 2rem;
+    }
+
+    .action-buttons-row {
+      display: flex;
+      justify-content: center;
+      gap: 1rem;
+      flex-wrap: wrap;
+
+      .metro-btn-primary {
+        background: #3182CE;
+        border-color: #3182CE;
+        color: #FFFFFF;
+        font-weight: 600;
+        padding: 0.75rem 1.5rem;
+        border-radius: 8px;
+
+        &:hover {
+          background: #2B6CB0;
+        }
+      }
+    }
+  }
+}

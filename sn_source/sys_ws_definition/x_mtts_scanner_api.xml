@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<record_update table="sys_ws_definition">
+  <sys_ws_definition action="INSERT_OR_UPDATE">
+    <active>true</active>
+    <base_uri>/api/x_mtts/scanner</base_uri>
+    <consumes>application/json</consumes>
+    <consumes_customized>false</consumes_customized>
+    <default_version>v1</default_version>
+    <doc_url/>
+    <enforce_acl>x_mtts.scanner</enforce_acl>
+    <name>Metro Turnstile Scanner API</name>
+    <namespace>x_mtts</namespace>
+    <produces>application/json</produces>
+    <produces_customized>false</produces_customized>
+    <service_id>scanner</service_id>
+    <short_description>Authoritative verification endpoint for physical metro turnstiles and handheld inspectors</short_description>
+    <sys_package display_value="Metro Ticket Generating System" source="x_mtts">x_mtts</sys_package>
+    <sys_scope display_value="Metro Ticket Generating System">x_mtts</sys_scope>
+  </sys_ws_definition>
+</record_update>

@@ -1,0 +1,446 @@
+.my-bookings-container {
+  max-width: 1200px;
+  margin: 2rem auto;
+  padding: 0 1.5rem;
+
+  .page-header-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 2rem;
+    flex-wrap: wrap;
+    gap: 1rem;
+
+    .page-title {
+      font-size: 2rem;
+      font-weight: 800;
+      color: #1A365D;
+      margin: 0;
+    }
+
+    .page-subtitle {
+      color: #718096;
+      font-size: 1rem;
+      margin-top: 0.25rem;
+    }
+  }
+
+  .controls-card {
+    background: #FFFFFF;
+    border: 1px solid #E2E8F0;
+    border-radius: 12px;
+    padding: 1.25rem;
+    margin-bottom: 2rem;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04);
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+
+    .search-box {
+      position: relative;
+
+      .search-icon {
+        position: absolute;
+        left: 1rem;
+        top: 50%;
+        transform: translateY(-50%);
+        color: #A0AEC0;
+      }
+
+      input {
+        padding-left: 2.75rem;
+        height: 44px;
+        border-radius: 8px;
+        border: 1px solid #CBD5E0;
+        font-size: 0.95rem;
+
+        &:focus {
+          border-color: #3182CE;
+          box-shadow: 0 0 0 1px #3182CE;
+        }
+      }
+    }
+
+    .status-filters {
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+
+      .filter-btn {
+        background: #EDF2F7;
+        color: #4A5568;
+        border: none;
+        border-radius: 20px;
+        font-size: 0.85rem;
+        font-weight: 600;
+        padding: 0.4rem 1rem;
+        transition: all 0.2s;
+
+        &:hover {
+          background: #E2E8F0;
+        }
+
+        &.active {
+          background: #3182CE;
+          color: #FFFFFF;
+        }
+      }
+    }
+  }
+
+  .bookings-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+    gap: 1.5rem;
+  }
+
+  .booking-card {
+    background: #FFFFFF;
+    border: 1px solid #E2E8F0;
+    border-radius: 12px;
+    padding: 1.5rem;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+    transition: all 0.2s;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+
+    &:hover {
+      box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08);
+      border-color: #CBD5E0;
+    }
+
+    .card-top-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 1rem;
+
+      .booking-ref-block {
+        display: flex;
+        flex-direction: column;
+
+        .ref-label {
+          font-size: 0.75rem;
+          color: #A0AEC0;
+          text-transform: uppercase;
+          font-weight: 700;
+        }
+
+        .ref-value {
+          font-family: monospace;
+          font-weight: 700;
+          font-size: 1rem;
+          color: #2D3748;
+        }
+      }
+
+      .status-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        font-size: 0.75rem;
+        font-weight: 700;
+        padding: 0.3rem 0.75rem;
+        border-radius: 20px;
+        text-transform: uppercase;
+
+        &.pill-generated {
+          background: #DEF7EC;
+          color: #03543F;
+        }
+
+        &.pill-pending {
+          background: #FEF08A;
+          color: #713F12;
+        }
+
+        &.pill-approved {
+          background: #EBF8FF;
+          color: #2B6CB0;
+        }
+
+        &.pill-cancelled {
+          background: #FEE2E2;
+          color: #991B1B;
+        }
+
+        &.pill-declined {
+          background: #FFF1F2;
+          color: #BE123C;
+          border: 1px solid #FECDD3;
+        }
+      }
+    }
+
+    .journey-route-block {
+      background: #F8FAFC;
+      border-radius: 8px;
+      padding: 0.75rem 1rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 1rem;
+
+      .station-leg {
+        display: flex;
+        flex-direction: column;
+        max-width: 40%;
+
+        .leg-label {
+          font-size: 0.7rem;
+          color: #718096;
+          text-transform: uppercase;
+        }
+
+        .station-name {
+          font-size: 0.9rem;
+          font-weight: 700;
+          color: #2D3748;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+      }
+
+      .route-arrow {
+        color: #3182CE;
+        font-weight: bold;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+
+        .distance-pill {
+          font-size: 0.7rem;
+          background: #EDF2F7;
+          color: #4A5568;
+          padding: 0.1rem 0.4rem;
+          border-radius: 4px;
+        }
+      }
+    }
+
+    .card-details-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.75rem;
+      margin-bottom: 1rem;
+      font-size: 0.85rem;
+
+      .detail-cell {
+        display: flex;
+        flex-direction: column;
+
+        .d-label {
+          color: #A0AEC0;
+          font-size: 0.75rem;
+        }
+
+        .d-val {
+          color: #2D3748;
+          font-weight: 600;
+
+          &.fare-highlight {
+            color: #2B6CB0;
+            font-size: 1.1rem;
+          }
+        }
+      }
+    }
+
+    .ticket-number-bar {
+      background: #EBF8FF;
+      color: #2B6CB0;
+      padding: 0.4rem 0.75rem;
+      border-radius: 6px;
+      font-size: 0.85rem;
+      margin-bottom: 1rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .card-actions-bar {
+      border-top: 1px solid #EDF2F7;
+      padding-top: 1rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+
+      .cancelled-notice {
+        font-size: 0.8rem;
+        color: #E53E3E;
+        font-weight: 600;
+      }
+    }
+  }
+
+  .empty-state-card {
+    background: #FFFFFF;
+    border: 2px dashed #CBD5E0;
+    border-radius: 12px;
+    padding: 4rem 2rem;
+    max-width: 600px;
+    margin: 3rem auto;
+
+    .empty-icon {
+      font-size: 3rem;
+      margin-bottom: 1rem;
+    }
+
+    h3 {
+      font-weight: 700;
+      color: #2D3748;
+      margin-bottom: 0.5rem;
+    }
+
+    p {
+      color: #718096;
+    }
+  }
+
+  // Modals Styling
+  .metro-modal-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1050;
+    padding: 1rem;
+  }
+
+  .metro-modal-dialog {
+    max-width: 480px;
+    width: 100%;
+    animation: modalSlideIn 0.25s ease-out;
+
+    .ticket-pass-card {
+      background: #FFFFFF;
+      border-radius: 16px;
+      overflow: hidden;
+      box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.2);
+
+      .ticket-pass-header {
+        background: #1A365D;
+        color: #FFFFFF;
+        padding: 1.5rem;
+
+        &.bg-generated { background: #065F46; }
+        &.bg-pending { background: #854D0E; }
+        &.bg-approved { background: #1E40AF; }
+        &.bg-cancelled { background: #991B1B; }
+
+        .pass-brand {
+          font-size: 0.85rem;
+          font-weight: 700;
+          letter-spacing: 0.5px;
+        }
+
+        .pass-status {
+          font-size: 0.75rem;
+          background: rgba(255, 255, 255, 0.2);
+          padding: 0.2rem 0.6rem;
+          border-radius: 12px;
+          text-transform: uppercase;
+        }
+
+        .pass-ticket-num {
+          font-size: 1.25rem;
+          font-family: monospace;
+          margin-top: 0.5rem;
+          margin-bottom: 0;
+        }
+      }
+
+      .ticket-pass-body {
+        padding: 1.5rem;
+
+        .route-display {
+          margin-bottom: 1.25rem;
+
+          .route-line {
+            font-size: 1.1rem;
+            font-weight: 800;
+            color: #2D3748;
+          }
+
+          .route-sub {
+            font-size: 0.85rem;
+            color: #718096;
+          }
+        }
+
+        .pass-metadata-row {
+          display: flex;
+          justify-content: space-between;
+          background: #F7FAFC;
+          border-radius: 8px;
+          padding: 0.75rem 1rem;
+          margin-bottom: 1.25rem;
+          font-size: 0.8rem;
+
+          .m-label {
+            display: block;
+            color: #A0AEC0;
+          }
+
+          .m-val {
+            font-weight: 700;
+            color: #2D3748;
+          }
+        }
+
+        .qr-code-section {
+          padding: 1rem 0;
+
+          .qr-svg-holder {
+            display: inline-block;
+            background: #FFFFFF;
+            padding: 0.5rem;
+            border: 2px solid #E2E8F0;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+
+            svg {
+              max-width: 200px;
+              height: auto;
+              display: block;
+            }
+          }
+
+          .qr-instruction {
+            font-size: 0.8rem;
+            color: #718096;
+            margin-top: 0.75rem;
+          }
+        }
+
+        .pending-notice-section {
+          padding: 2rem 0;
+
+          .notice-icon {
+            font-size: 3rem;
+            margin-bottom: 0.75rem;
+          }
+        }
+      }
+
+      .ticket-pass-footer {
+        background: #F7FAFC;
+        padding: 1rem 1.5rem;
+        border-top: 1px solid #EDF2F7;
+      }
+    }
+  }
+}
+
+@keyframes modalSlideIn {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}

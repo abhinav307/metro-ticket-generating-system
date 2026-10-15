@@ -1,0 +1,29 @@
+{
+  "id": "my_metro_bookings",
+  "title": "My Metro Bookings & Tickets",
+  "url_suffix": "my-metro-bookings",
+  "scope": "x_mtts",
+  "public": false,
+  "roles": ["x_mtts.user", "snc_internal"],
+  "layout": "standard_fluid",
+  "containers": [
+    {
+      "order": 1,
+      "widgets": [
+        {
+          "widget_id": "widget_metro_portal_header",
+          "size": 12
+        }
+      ]
+    },
+    {
+      "order": 2,
+      "widgets": [
+        {
+          "widget_id": "widget_my_metro_bookings",
+          "size": 12
+        }
+      ]
+    }
+  ]
+}

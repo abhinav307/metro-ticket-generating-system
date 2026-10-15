@@ -1,0 +1,22 @@
+[
+  {
+    "name": "x_mtts.admin",
+    "description": "Metro Ticket System Administrator with full CRUD rights over station, route, fare rule, and ticket type master data.",
+    "elevated_privilege": false
+  },
+  {
+    "name": "x_mtts.approver",
+    "description": "Station Approver role allowing review and decision-making on assigned booking approval tasks.",
+    "elevated_privilege": false
+  },
+  {
+    "name": "x_mtts.user",
+    "description": "Commuter user role allowing catalog booking submission and access to personal booking history.",
+    "elevated_privilege": false
+  },
+  {
+    "name": "x_mtts.scanner",
+    "description": "Turnstile and handheld inspector device service role authorized to invoke the ticket verification API and record scan audit events.",
+    "elevated_privilege": false
+  }
+]

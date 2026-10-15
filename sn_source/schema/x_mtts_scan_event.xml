@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<database>
+  <element label="Metro Turnstile Scan Event" name="x_mtts_scan_event" type="collection" comments="Audited verification history of ticket scans at metro turnstiles and handheld inspectors">
+    <element label="Ticket Number" name="ticket_number" type="string" max_length="32" mandatory="false" read_only="true" unique="false" display="true" comments="Issued ticket number presented during scan"/>
+    <element label="Booking Ticket" name="booking_ticket" type="reference" reference="x_mtts_booking_ticket" mandatory="false" read_only="true" unique="false" display="false" comments="Foreign key reference to booking record"/>
+    <element label="Station Code" name="station_code" type="string" max_length="32" mandatory="false" read_only="true" unique="false" display="false" comments="Operational station code where scan occurred"/>
+    <element label="Scanner ID" name="scanner_id" type="string" max_length="64" mandatory="true" read_only="true" unique="false" display="false" comments="Turnstile device or handheld terminal identifier"/>
+    <element label="Verification Outcome" name="verification_outcome" type="string" max_length="32" mandatory="true" read_only="true" unique="false" display="false" comments="Outcome: VALID, TOKEN_MISMATCH, TICKET_NOT_FOUND, TICKET_CANCELLED_OR_INVALID, INVALID_REQUEST, UNAUTHORIZED, RATE_LIMITED, INTERNAL_ERROR"/>
+    <element label="Error Code" name="error_code" type="string" max_length="64" mandatory="false" read_only="true" unique="false" display="false" comments="Standardized machine-readable error classification"/>
+    <element label="Correlation ID" name="correlation_id" type="string" max_length="64" mandatory="true" read_only="true" unique="false" display="false" comments="End-to-end request tracing identifier"/>
+    <element label="Processing Duration (ms)" name="processing_duration_ms" type="integer" mandatory="false" read_only="true" unique="false" display="false" comments="Server execution latency in milliseconds"/>
+    <element label="Client IP" name="client_ip" type="string" max_length="45" mandatory="false" read_only="true" unique="false" display="false" comments="Network IP address of the scanner client"/>
+    <element label="Scan Timestamp" name="scan_timestamp" type="glide_date_time" mandatory="true" read_only="true" unique="false" display="false" comments="Precise UTC timestamp of scan verification"/>
+    
+    <index name="idx_x_mtts_scan_tkt" unique="false">
+      <element name="ticket_number"/>
+    </index>
+    <index name="idx_x_mtts_scan_device" unique="false">
+      <element name="scanner_id"/>
+    </index>
+    <index name="idx_x_mtts_scan_time" unique="false">
+      <element name="scan_timestamp"/>
+    </index>
+  </element>
+</database>

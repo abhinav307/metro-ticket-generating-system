@@ -1,0 +1,73 @@
+[
+  {
+    "name": "Metro Booking Submitted (Pending)",
+    "event_name": "x_mtts.booking.submitted",
+    "table": "x_mtts_booking_ticket",
+    "recipient_fields": ["passenger"],
+    "subject": "Metro Booking Received: ${booking_reference} (Pending Approval)",
+    "send_self": true,
+    "active": true,
+    "description": "Notifies commuter that their booking has been received and is pending station manager review. Does NOT prematurely issue a ticket number."
+  },
+  {
+    "name": "Metro Booking Approval Requested",
+    "event_name": "x_mtts.approval.requested",
+    "table": "x_mtts_booking_ticket",
+    "recipient_groups": ["Metro Station Approvers"],
+    "subject": "ACTION REQUIRED: Approve Metro Booking ${booking_reference}",
+    "send_self": true,
+    "active": true,
+    "description": "Alerts station duty managers of an incoming booking request requiring operational review."
+  },
+  {
+    "name": "Metro Booking Approved (Fulfillment In Progress)",
+    "event_name": "x_mtts.booking.approved",
+    "table": "x_mtts_booking_ticket",
+    "recipient_fields": ["passenger"],
+    "subject": "Metro Booking Approved: ${booking_reference} (Ticket Issuing)",
+    "send_self": true,
+    "active": true,
+    "description": "Advises commuter that approval was granted and digital ticket generation is in progress."
+  },
+  {
+    "name": "Metro Digital Ticket Ready",
+    "event_name": "x_mtts.ticket.generated",
+    "table": "x_mtts_booking_ticket",
+    "recipient_fields": ["passenger"],
+    "subject": "Your Metro Digital Pass is Ready: ${ticket_number}",
+    "send_self": true,
+    "include_attachments": true,
+    "active": true,
+    "description": "Delivers the generated ticket number, portal access link, and attached vector SVG QR pass to the commuter."
+  },
+  {
+    "name": "Metro Booking Declined",
+    "event_name": "x_mtts.booking.declined",
+    "table": "x_mtts_booking_ticket",
+    "recipient_fields": ["passenger"],
+    "subject": "Metro Booking Declined: ${booking_reference}",
+    "send_self": true,
+    "active": true,
+    "description": "Informs commuter that station operations declined the request, detailing the operational reason. Does not describe as passenger cancellation."
+  },
+  {
+    "name": "Metro Booking Cancelled",
+    "event_name": "x_mtts.booking.cancelled",
+    "table": "x_mtts_booking_ticket",
+    "recipient_fields": ["passenger"],
+    "subject": "Metro Booking Cancelled: ${booking_reference}",
+    "send_self": true,
+    "active": true,
+    "description": "Confirms voluntary passenger cancellation and provides refund status if policy is active."
+  },
+  {
+    "name": "Metro Fulfillment Failure Alert",
+    "event_name": "x_mtts.operational.failure",
+    "table": "x_mtts_booking_ticket",
+    "recipient_groups": ["Metro Operations Administrators"],
+    "subject": "ALERT: Fulfillment Exception on Metro Booking ${booking_reference}",
+    "send_self": true,
+    "active": true,
+    "description": "Alerts IT and transit operations administrators of an exception during QR ticket generation."
+  }
+]

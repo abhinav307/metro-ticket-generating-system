@@ -1,0 +1,69 @@
+<div class="confirmation-wrapper" role="main" aria-labelledby="conf-heading">
+  <div class="confirmation-card text-center">
+    <div class="success-badge-icon" aria-hidden="true">
+      <i class="fa fa-clock-o"></i>
+    </div>
+
+    <span class="status-indicator-tag">Pending Supervisor Approval</span>
+    <h1 id="conf-heading" class="conf-title">Booking Submitted Successfully</h1>
+    <p class="conf-lead">
+      Your request has been routed to <strong>Metro Station Approvers</strong>. Your digital ticket will be generated immediately upon approval.
+    </p>
+
+    <!-- Booking Reference Banner -->
+    <div class="booking-ref-box">
+      <span class="box-label">Your Booking Reference</span>
+      <span class="box-ref">{{data.booking.booking_reference}}</span>
+    </div>
+
+    <!-- Snapshot Details -->
+    <div class="summary-table-wrap">
+      <table class="table summary-table text-left" role="table">
+        <tbody>
+          <tr>
+            <th scope="row">Departure Station:</th>
+            <td>{{data.booking.source_station}}</td>
+          </tr>
+          <tr>
+            <th scope="row">Arrival Station:</th>
+            <td>{{data.booking.destination_station}}</td>
+          </tr>
+          <tr>
+            <th scope="row">Travel Date:</th>
+            <td>{{data.booking.travel_date}}</td>
+          </tr>
+          <tr>
+            <th scope="row">Ticket Type:</th>
+            <td>{{data.booking.ticket_type}}</td>
+          </tr>
+          <tr>
+            <th scope="row">Passenger Count:</th>
+            <td>{{data.booking.passenger_count}} Passenger(s)</td>
+          </tr>
+          <tr>
+            <th scope="row">Authoritative Total Fare:</th>
+            <td class="fare-total">${{data.booking.total_fare}}</td>
+          </tr>
+          <tr>
+            <th scope="row">Current Status:</th>
+            <td><span class="badge badge-warning">Pending Approval</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="advisory-alert alert alert-info text-left">
+      <i class="fa fa-info-circle"></i>
+      <strong>Please Note:</strong> Digital QR tickets are only issued after administrative approval. You cannot board transit until your ticket status changes to <em>Ticket Ready</em>.
+    </div>
+
+    <div class="action-buttons-row">
+      <a href="?id=my_metro_bookings" class="btn btn-primary metro-btn-primary">
+        <i class="fa fa-qrcode" aria-hidden="true"></i> View My Bookings
+      </a>
+      <a href="?id=sc_cat_item&sys_id={{data.catItemSysId}}" class="btn btn-outline-secondary">
+        <i class="fa fa-plus" aria-hidden="true"></i> Book Another Ticket
+      </a>
+    </div>
+  </div>
+</div>

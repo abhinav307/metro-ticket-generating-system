@@ -1,0 +1,26 @@
+[
+  {
+    "name": "Metro Station Approvers",
+    "description": "Operational station duty managers responsible for validating and approving metro ticket bookings.",
+    "roles": ["x_mtts.approver"],
+    "active": true
+  },
+  {
+    "name": "Metro Operations Administrators",
+    "description": "System administrators overseeing transit master data, fare schedules, and fulfillment error escalation queues.",
+    "roles": ["x_mtts.admin"],
+    "active": true
+  },
+  {
+    "name": "Metro Turnstile Scanners",
+    "description": "Automated turnstile gate controllers and handheld ticket inspection devices authorized for scanner REST API verification.",
+    "roles": ["x_mtts.scanner"],
+    "active": true
+  },
+  {
+    "name": "Metro Commuters",
+    "description": "Registered transit passengers authorized to submit bookings and view personal booking records.",
+    "roles": ["x_mtts.user"],
+    "active": true
+  }
+]

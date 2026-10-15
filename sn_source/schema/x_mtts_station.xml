@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<database>
+  <element label="Metro Station" name="x_mtts_station" type="collection">
+    <element label="Station Code" name="station_code" type="string" max_length="20" mandatory="true" read_only="false" unique="true" display="false" comments="Unique uppercase alphanumeric station code (e.g., STN-01)"/>
+    <element label="Station Name" name="name" type="string" max_length="100" mandatory="true" read_only="false" unique="false" display="true" comments="Primary display name of metro station"/>
+    <element label="Line / Zone" name="line_zone" type="choice" max_length="50" mandatory="true" read_only="false" unique="false" display="false" comments="Transit line or geographic zone">
+      <choice value="Blue Line" label="Blue Line" sequence="1"/>
+      <choice value="Red Line" label="Red Line" sequence="2"/>
+      <choice value="Airport Express" label="Airport Express" sequence="3"/>
+      <choice value="Green Line" label="Green Line" sequence="4"/>
+    </element>
+    <element label="Active" name="active" type="boolean" default="true" mandatory="true" read_only="false" unique="false" display="false" comments="Operational flag"/>
+    <element label="Station Order" name="order" type="integer" default="0" mandatory="false" read_only="false" unique="false" display="false" comments="Sequential order index on line"/>
+    <index name="idx_x_mtts_station_code" unique="true">
+      <element name="station_code"/>
+    </index>
+  </element>
+</database>

@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<database>
+  <element label="Metro Booking / Ticket" name="x_mtts_booking_ticket" type="collection">
+    <element label="Booking Reference" name="booking_reference" type="string" max_length="30" mandatory="true" read_only="true" unique="true" display="true" comments="Unique human-readable booking reference (BKG-YYYYMMDD-XXXX)"/>
+    <element label="Ticket Number" name="ticket_number" type="string" max_length="30" mandatory="false" read_only="true" unique="true" display="false" comments="Unique issued ticket number (TKT-YYYYMMDD-XXXXXX)"/>
+    <element label="Passenger" name="passenger" type="reference" reference="sys_user" mandatory="true" read_only="true" unique="false" display="false" comments="Passenger user record"/>
+    <element label="Request Item" name="request_item" type="reference" reference="sc_req_item" mandatory="true" read_only="true" unique="false" display="false" comments="Parent Service Catalog Request Item"/>
+    <element label="Source Station" name="source_station" type="reference" reference="x_mtts_station" mandatory="true" read_only="true" unique="false" display="false" comments="Selected departure station"/>
+    <element label="Destination Station" name="destination_station" type="reference" reference="x_mtts_station" mandatory="true" read_only="true" unique="false" display="false" comments="Selected arrival station"/>
+    <element label="Ticket Type" name="ticket_type" type="reference" reference="x_mtts_ticket_type" mandatory="true" read_only="true" unique="false" display="false" comments="Selected ticket classification"/>
+    <element label="Travel Date" name="travel_date" type="glide_date" mandatory="true" read_only="true" unique="false" display="false" comments="Scheduled travel date"/>
+    <element label="Passenger Count" name="passenger_count" type="integer" mandatory="true" read_only="true" unique="false" display="false" comments="Number of passengers"/>
+    <element label="Calculated Distance (km)" name="calculated_distance" type="decimal" max_length="6" scale="2" mandatory="true" read_only="true" unique="false" display="false" comments="Snapshot route distance (0.00 for Pass)"/>
+    <element label="Unit Fare" name="unit_fare" type="currency" mandatory="true" read_only="true" unique="false" display="false" comments="Snapshot unit fare per passenger"/>
+    <element label="Total Fare" name="total_fare" type="currency" mandatory="true" read_only="true" unique="false" display="false" comments="Snapshot total booking fare"/>
+    <element label="Currency Code" name="currency_code" type="string" max_length="3" mandatory="true" default="USD" read_only="true" unique="false" display="false" comments="Snapshot ISO currency code"/>
+    <element label="Status" name="status" type="choice" max_length="20" mandatory="true" default="Pending" read_only="false" unique="false" display="false" comments="Lifecycle state">
+      <choice value="Pending" label="Pending" sequence="1"/>
+      <choice value="Approved" label="Approved" sequence="2"/>
+      <choice value="Generated" label="Generated" sequence="3"/>
+      <choice value="Cancelled" label="Cancelled" sequence="4"/>
+      <choice value="Rejected" label="Rejected (Proposed)" sequence="5"/>
+    </element>
+    <element label="QR Token Hash" name="qr_token_hash" type="string" max_length="128" mandatory="false" read_only="true" unique="false" display="false" comments="Cryptographic one-way digest of random bearer token"/>
+    <element label="QR Payload" name="qr_payload" type="string" max_length="1000" mandatory="false" read_only="true" unique="false" display="false" comments="Sanitized JSON metadata payload (zero PII, no raw token)"/>
+    <element label="QR Attachment" name="qr_attachment" type="reference" reference="sys_attachment" mandatory="false" read_only="true" unique="false" display="false" comments="Reference to generated QR vector SVG attachment"/>
+    <element label="Generation Time" name="generation_time" type="glide_date_time" mandatory="false" read_only="true" unique="false" display="false" comments="Fulfillment completion timestamp"/>
+    <element label="Cancellation Time" name="cancellation_time" type="glide_date_time" mandatory="false" read_only="true" unique="false" display="false" comments="Cancellation confirmation timestamp"/>
+    <element label="Cancellation Reason" name="cancellation_reason" type="string" max_length="255" mandatory="false" read_only="true" unique="false" display="false" comments="Commuter or administrative cancellation reason"/>
+    <element label="Refund Amount" name="refund_amount" type="currency" mandatory="false" read_only="true" unique="false" display="false" comments="Calculated refund audit ledger"/>
+    <index name="idx_x_mtts_bkg_ref" unique="true">
+      <element name="booking_reference"/>
+    </index>
+    <index name="idx_x_mtts_tkt_num" unique="true">
+      <element name="ticket_number"/>
+    </index>
+    <index name="idx_x_mtts_bkg_passenger" unique="false">
+      <element name="passenger"/>
+      <element name="status"/>
+    </index>
+    <index name="idx_x_mtts_bkg_ritm" unique="false">
+      <element name="request_item"/>
+    </index>
+  </element>
+</database>

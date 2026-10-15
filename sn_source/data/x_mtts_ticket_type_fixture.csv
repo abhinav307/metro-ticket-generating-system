@@ -1,0 +1,4 @@
+code,name,pricing_model,validity_hours,active
+SINGLE,Single Journey,Distance_Based,4,true
+RETURN,Return Ticket,Distance_Based,24,true
+PASS,Daily Pass,Fixed,24,true

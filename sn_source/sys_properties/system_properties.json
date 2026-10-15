@@ -1,0 +1,107 @@
+[
+  {
+    "name": "x_mtts.default_currency",
+    "description": "Operating currency ISO code for ticket fares. Candidate options: USD, INR, EUR, GBP. Subject to owner approval.",
+    "type": "string",
+    "value": "USD",
+    "is_private": false
+  },
+  {
+    "name": "x_mtts.max_passengers_per_booking",
+    "description": "Maximum number of passengers permitted in a single booking transaction. Candidate limit: 6. Subject to owner approval.",
+    "type": "integer",
+    "value": "6",
+    "is_private": false
+  },
+  {
+    "name": "x_mtts.max_advance_booking_days",
+    "description": "Maximum allowable days in advance for scheduling a travel date. Candidate window: 30 days. Subject to owner approval.",
+    "type": "integer",
+    "value": "30",
+    "is_private": false
+  },
+  {
+    "name": "x_mtts.cancellation_tier_greater_24h_pct",
+    "description": "Illustrative refund percentage for cancellations requested more than 24 hours prior to travel date. Pending policy sign-off.",
+    "type": "integer",
+    "value": "90",
+    "is_private": false
+  },
+  {
+    "name": "x_mtts.cancellation_tier_2_to_24h_pct",
+    "description": "Illustrative refund percentage for cancellations requested between 2 and 24 hours prior to travel date. Pending policy sign-off.",
+    "type": "integer",
+    "value": "75",
+    "is_private": false
+  },
+  {
+    "name": "x_mtts.cancellation_tier_less_2h_pct",
+    "description": "Illustrative refund percentage for cancellations requested less than 2 hours prior to travel date. Pending policy sign-off.",
+    "type": "integer",
+    "value": "0",
+    "is_private": false
+  },
+  {
+    "name": "x_mtts.cancellation.policy_status",
+    "description": "Operational governance gate for booking cancellation and refund calculations. Default UNCONFIGURED blocks cancellation until formal policy approval. Candidate active value: ACTIVE.",
+    "type": "string",
+    "value": "UNCONFIGURED",
+    "is_private": false
+  },
+  {
+    "name": "x_mtts.lifecycle.enable_rejected_status",
+    "description": "Controls whether the proposed 5th lifecycle status 'Rejected' is enabled. Default false retains the baseline 4-status model (Pending, Approved, Generated, Cancelled) with administrative rejection fallback.",
+    "type": "boolean",
+    "value": "false",
+    "is_private": false
+  },
+  {
+    "name": "x_mtts.scanner.rate_limit_window_sec",
+    "description": "Rolling time window in seconds for tracking repeated failed ticket verification attempts per scanner/client.",
+    "type": "integer",
+    "value": "60",
+    "is_private": false
+  },
+  {
+    "name": "x_mtts.scanner.max_failed_attempts",
+    "description": "Maximum permitted failed verification attempts within the rate-limit window before triggering temporary lockout (HTTP 429).",
+    "type": "integer",
+    "value": "5",
+    "is_private": false
+  },
+  {
+    "name": "x_mtts.scanner.audit_logging_enabled",
+    "description": "Flag to enable structured verification logging into x_mtts_scan_event table for all turnstile scans.",
+    "type": "boolean",
+    "value": "true",
+    "is_private": false
+  },
+  {
+    "name": "x_mtts.notifications.enabled",
+    "description": "Global master switch for event-driven email notifications triggered by booking lifecycle transitions. Default false keeps production outbound email disabled until instance activation.",
+    "type": "boolean",
+    "value": "false",
+    "is_private": false
+  },
+  {
+    "name": "x_mtts.notifications.sender_display_name",
+    "description": "Outbound sender display name for automated passenger and staff notifications.",
+    "type": "string",
+    "value": "Metro Transit Operations",
+    "is_private": false
+  },
+  {
+    "name": "x_mtts.audit.retention_policy_status",
+    "description": "Operational governance safety gate for scan event audit data retention. Default UNCONFIGURED blocks automated deletions until formal transit authority approval. Candidate active value: ACTIVE.",
+    "type": "string",
+    "value": "UNCONFIGURED",
+    "is_private": false
+  },
+  {
+    "name": "x_mtts.audit.retention_days",
+    "description": "Approved retention window in days for x_mtts_scan_event records. Inactive while retention_policy_status is UNCONFIGURED. Candidate value: subject to transit authority sign-off.",
+    "type": "integer",
+    "value": "0",
+    "is_private": false
+  }
+]

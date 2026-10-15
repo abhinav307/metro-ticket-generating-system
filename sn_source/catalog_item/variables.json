@@ -1,0 +1,88 @@
+{
+  "catalog_item": "Metro Ticket Booking",
+  "variables": [
+    {
+      "name": "source_station",
+      "label": "Departure Station (Origin)",
+      "type": "Reference",
+      "reference_table": "x_mtts_station",
+      "reference_qualifier": "active=true^ORDERBYsequence_order",
+      "mandatory": true,
+      "order": 100,
+      "help_text": "Select the origin station where your journey begins."
+    },
+    {
+      "name": "destination_station",
+      "label": "Arrival Station (Destination)",
+      "type": "Reference",
+      "reference_table": "x_mtts_station",
+      "reference_qualifier": "active=true^ORDERBYsequence_order",
+      "mandatory": true,
+      "order": 200,
+      "help_text": "Select your destination station. Must be different from departure."
+    },
+    {
+      "name": "travel_date",
+      "label": "Travel Date",
+      "type": "Date",
+      "mandatory": true,
+      "default_value": "javascript:gs.now()",
+      "order": 300,
+      "help_text": "Select your planned travel date (within configured advance booking window)."
+    },
+    {
+      "name": "ticket_type",
+      "label": "Ticket Type",
+      "type": "Reference",
+      "reference_table": "x_mtts_ticket_type",
+      "reference_qualifier": "active=true",
+      "mandatory": true,
+      "order": 400,
+      "help_text": "Single Journey, Return Ticket (with return discount), or All-Day Pass."
+    },
+    {
+      "name": "passenger_count",
+      "label": "Number of Passengers",
+      "type": "Select Box",
+      "mandatory": true,
+      "default_value": "1",
+      "order": 500,
+      "choices": [
+        {"value": "1", "label": "1 Passenger"},
+        {"value": "2", "label": "2 Passengers"},
+        {"value": "3", "label": "3 Passengers"},
+        {"value": "4", "label": "4 Passengers"},
+        {"value": "5", "label": "5 Passengers"},
+        {"value": "6", "label": "6 Passengers (Maximum)"}
+      ],
+      "help_text": "Headcount for group or single travel (up to 6 passengers per booking)."
+    },
+    {
+      "name": "estimated_distance",
+      "label": "Calculated Distance (km)",
+      "type": "Single Line Text",
+      "read_only": true,
+      "mandatory": false,
+      "order": 600,
+      "help_text": "Advisory track distance calculated from official route table."
+    },
+    {
+      "name": "estimated_unit_fare",
+      "label": "Unit Fare ($)",
+      "type": "Single Line Text",
+      "read_only": true,
+      "mandatory": false,
+      "order": 700,
+      "help_text": "Calculated fare per individual passenger for the selected ticket type."
+    },
+    {
+      "name": "estimated_total_fare",
+      "label": "Total Estimated Fare ($)",
+      "type": "Single Line Text",
+      "read_only": true,
+      "mandatory": false,
+      "order": 800,
+      "help_text": "Total fare for all passengers. Will be authoritatively verified on submission."
+    }
+  ]
+}

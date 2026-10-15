@@ -1,0 +1,51 @@
+[
+  {
+    "event_name": "x_mtts.booking.submitted",
+    "table": "x_mtts_booking_ticket",
+    "description": "Fired when a passenger submits a metro booking request and the record is initialized in Pending status.",
+    "fired_by": "Business Rule: BR_ReqItem_CreateMetroBooking / MetroBookingService",
+    "caller_access": "x_mtts"
+  },
+  {
+    "event_name": "x_mtts.approval.requested",
+    "table": "x_mtts_booking_ticket",
+    "description": "Fired when an approval task is generated on the parent sc_req_item for station approvers.",
+    "fired_by": "Flow Designer: MetroBookingApprovalAndFulfillmentFlow",
+    "caller_access": "x_mtts"
+  },
+  {
+    "event_name": "x_mtts.booking.approved",
+    "table": "x_mtts_booking_ticket",
+    "description": "Fired when a station approver approves the booking request.",
+    "fired_by": "Flow Designer: MetroBookingApprovalAndFulfillmentFlow",
+    "caller_access": "x_mtts"
+  },
+  {
+    "event_name": "x_mtts.ticket.generated",
+    "table": "x_mtts_booking_ticket",
+    "description": "Fired when MetroTicketGenerator successfully fulfills a booking and transitions it to Generated.",
+    "fired_by": "Script Include: MetroTicketGenerator.fulfillBooking",
+    "caller_access": "x_mtts"
+  },
+  {
+    "event_name": "x_mtts.booking.declined",
+    "table": "x_mtts_booking_ticket",
+    "description": "Fired when a station approver declines the booking request and administrative rejection is executed.",
+    "fired_by": "Flow Designer: MetroBookingApprovalAndFulfillmentFlow",
+    "caller_access": "x_mtts"
+  },
+  {
+    "event_name": "x_mtts.booking.cancelled",
+    "table": "x_mtts_booking_ticket",
+    "description": "Fired when a permitted passenger cancellation completes successfully.",
+    "fired_by": "Script Include: MetroBookingService.cancelBooking",
+    "caller_access": "x_mtts"
+  },
+  {
+    "event_name": "x_mtts.operational.failure",
+    "table": "x_mtts_booking_ticket",
+    "description": "Fired when an unhandled exception occurs during ticket fulfillment.",
+    "fired_by": "Script Include: MetroTicketGenerator",
+    "caller_access": "x_mtts"
+  }
+]

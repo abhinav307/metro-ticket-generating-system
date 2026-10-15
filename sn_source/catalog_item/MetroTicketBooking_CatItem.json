@@ -1,0 +1,25 @@
+{
+  "name": "Metro Ticket Booking",
+  "scope": "x_mtts",
+  "category": "Transportation Services",
+  "short_description": "Book digital metro transit tickets across all lines with dynamic fare calculation and QR delivery.",
+  "description": "Choose your departure and arrival stations, select your ticket type, review your real-time fare calculation, and submit your booking for digital ticketing.",
+  "active": true,
+  "availability": "Desktop and Mobile",
+  "catalogs": [
+    "Service Catalog"
+  ],
+  "roles": [
+    "x_mtts.user",
+    "snc_internal"
+  ],
+  "flow_designer_flow": "x_mtts.MetroBookingApprovalAndFulfillmentFlow",
+  "hide_sp": false,
+  "no_cart": true,
+  "no_order_now": false,
+  "no_proceed_checkout": true,
+  "no_quantity": true,
+  "no_search": false,
+  "omit_price": true,
+  "order": 100
+}

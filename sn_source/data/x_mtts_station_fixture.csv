@@ -1,0 +1,11 @@
+station_code,name,line_zone,active,order
+STN-01,Central Terminus,Blue Line,true,1
+STN-02,Market Square,Blue Line,true,2
+STN-03,Tech Park North,Blue Line,true,3
+STN-04,Financial District,Blue Line,true,4
+STN-05,Airport Junction,Blue Line,true,5
+STN-06,West University,Red Line,true,1
+STN-07,Civic Center,Red Line,true,2
+STN-08,Grand Interchange,Red Line,true,3
+STN-09,Harbor View,Red Line,true,4
+STN-99,Heritage Depot (Decommissioned),Red Line,false,99

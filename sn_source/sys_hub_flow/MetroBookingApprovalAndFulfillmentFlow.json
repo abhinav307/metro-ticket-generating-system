@@ -1,0 +1,124 @@
+{
+  "name": "Metro Ticket Booking Approval & Fulfillment Flow",
+  "internal_name": "x_mtts.metro_ticket_booking_fulfillment",
+  "scope": "x_mtts",
+  "active": true,
+  "description": "Orchestrates catalog submission, Station Approver review on sc_req_item, child booking state synchronization, and digital ticket fulfillment.",
+  "trigger": {
+    "type": "record_created",
+    "table": "sc_req_item",
+    "condition": "cat_item.name=Metro Ticket Booking^EQ",
+    "comments": "Restricted exclusively to the Metro Ticket Booking catalog item. Does not execute for any other service catalog item."
+  },
+  "stages": [
+    {
+      "order": 1,
+      "name": "Validation",
+      "action": "lookup_record",
+      "table": "x_mtts_booking_ticket",
+      "conditions": "request_item={{trigger.current.sys_id}}^EQ",
+      "comments": "Verifies that the child booking record was created synchronously during catalog checkout before proceeding."
+    },
+    {
+      "order": 2,
+      "name": "Approval Routing",
+      "action": "ask_for_approval",
+      "target_record": "{{trigger.current.sys_id}}",
+      "table": "sc_req_item",
+      "rules": [
+        {
+          "type": "anyone_approves",
+          "group": "Metro Station Approvers"
+        }
+      ],
+      "due_date": null,
+      "comments": "Creates sysapproval_approver record targeting sc_req_item. Escalation policy remains unconfigured pending stakeholder approval."
+    },
+    {
+      "order": 3,
+      "name": "Evaluate Approval Decision",
+      "action": "conditional_branch",
+      "branches": [
+        {
+          "condition": "{{step2.approval_state}} == 'approved'",
+          "steps": [
+            {
+              "name": "Set Booking Status to Approved",
+              "action": "update_record",
+              "table": "x_mtts_booking_ticket",
+              "record": "{{step1.record.sys_id}}",
+              "fields": { "status": "Approved" }
+            },
+            {
+              "name": "Invoke Fulfillment Engine",
+              "action": "execute_script_action",
+              "script": "(function execute(inputs, outputs) { var gen = new x_mtts.MetroTicketGenerator(); var res = gen.generateTicket(inputs.bookingSysId); outputs.success = res.success; outputs.ticketNumber = res.ticketNumber; outputs.error = res.error ? res.error.message : ''; })(inputs, outputs);",
+              "inputs": { "bookingSysId": "{{step1.record.sys_id}}" }
+            },
+            {
+              "name": "Evaluate Fulfillment Result",
+              "action": "conditional_branch",
+              "branches": [
+                {
+                  "condition": "{{fulfillment.success}} == true",
+                  "steps": [
+                    {
+                      "name": "Dispatch Ticket Generated Notification",
+                      "action": "trigger_event",
+                      "event_name": "x_mtts.ticket.generated",
+                      "table": "x_mtts_booking_ticket",
+                      "instance": "{{step1.record.sys_id}}"
+                    }
+                  ]
+                },
+                {
+                  "condition": "{{fulfillment.success}} == false",
+                  "steps": [
+                    {
+                      "name": "Dispatch Fulfillment Failure Alert to Admins",
+                      "action": "trigger_event",
+                      "event_name": "x_mtts.fulfillment.failed",
+                      "table": "x_mtts_booking_ticket",
+                      "instance": "{{step1.record.sys_id}}",
+                      "comments": "Booking remains in Approved status. Incident alert NOTIF-07 logged for admin retry."
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "condition": "{{step2.approval_state}} == 'rejected'",
+          "steps": [
+            {
+              "name": "Close Parent Request Item Incomplete",
+              "action": "update_record",
+              "table": "sc_req_item",
+              "record": "{{trigger.current.sys_id}}",
+              "fields": { "stage": "closed_incomplete", "state": "7" }
+            },
+            {
+              "name": "Update Booking Status to Fallback Cancelled",
+              "action": "update_record",
+              "table": "x_mtts_booking_ticket",
+              "record": "{{step1.record.sys_id}}",
+              "fields": {
+                "status": "Cancelled",
+                "cancellation_reason": "Administrative Rejection: {{step2.rejection_comments}}"
+              },
+              "comments": "Baseline 4-status model: Transitions to Cancelled with mandatory administrative rejection comments. If stakeholder approval for the proposed 5th Rejected status is formally granted, status will update to Rejected."
+            },
+            {
+              "name": "Dispatch Rejection Notification",
+              "action": "trigger_event",
+              "event_name": "x_mtts.booking.rejected",
+              "table": "x_mtts_booking_ticket",
+              "instance": "{{step1.record.sys_id}}"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

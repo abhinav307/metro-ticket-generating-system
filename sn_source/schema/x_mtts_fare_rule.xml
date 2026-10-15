@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<database>
+  <element label="Metro Fare Rule" name="x_mtts_fare_rule" type="collection">
+    <element label="Rule ID" name="rule_id" type="string" max_length="30" mandatory="true" read_only="false" unique="true" display="false" comments="Unique rule identifier (e.g., FR-SINGLE-01)"/>
+    <element label="Ticket Type" name="ticket_type" type="reference" reference="x_mtts_ticket_type" mandatory="true" read_only="false" unique="false" display="false" comments="Target ticket classification"/>
+    <element label="Rate Per KM" name="rate_per_km" type="decimal" max_length="6" scale="2" mandatory="false" read_only="false" unique="false" display="false" comments="Rate per km for distance-based fares"/>
+    <element label="Minimum Fare" name="minimum_fare" type="decimal" max_length="6" scale="2" mandatory="false" read_only="false" unique="false" display="false" comments="Minimum floor fare for distance-based trips"/>
+    <element label="Return Multiplier" name="return_multiplier" type="decimal" max_length="3" scale="2" mandatory="false" read_only="false" unique="false" display="false" comments="Return trip multiplier factor"/>
+    <element label="Fixed Fare" name="fixed_fare" type="decimal" max_length="6" scale="2" mandatory="false" read_only="false" unique="false" display="false" comments="Flat fixed fare for passes"/>
+    <element label="Currency" name="currency" type="choice" max_length="3" mandatory="true" default="USD" read_only="false" unique="false" display="false" comments="Operating currency ISO code">
+      <choice value="USD" label="USD ($)" sequence="1"/>
+      <choice value="INR" label="INR (₹)" sequence="2"/>
+      <choice value="EUR" label="EUR (€)" sequence="3"/>
+      <choice value="GBP" label="GBP (£)" sequence="4"/>
+    </element>
+    <element label="Effective Start" name="effective_start" type="glide_date" mandatory="true" read_only="false" unique="false" display="false" comments="Start date of fare validity"/>
+    <element label="Effective End" name="effective_end" type="glide_date" mandatory="false" read_only="false" unique="false" display="false" comments="Optional end date of fare validity"/>
+    <element label="Active" name="active" type="boolean" default="true" mandatory="true" read_only="false" unique="false" display="false" comments="Active status flag"/>
+    <index name="idx_x_mtts_fare_rule_id" unique="true">
+      <element name="rule_id"/>
+    </index>
+  </element>
+</database>

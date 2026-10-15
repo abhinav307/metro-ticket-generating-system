@@ -1,0 +1,39 @@
+<header class="metro-header" role="banner">
+  <div class="metro-header-container">
+    <div class="metro-brand">
+      <a href="?id=metro" class="metro-brand-link" aria-label="Metro Transit Home">
+        <span class="metro-logo-icon" aria-hidden="true">🚇</span>
+        <div class="metro-brand-text">
+          <span class="metro-title">MetroRail Express</span>
+          <span class="metro-subtitle">Digital Ticketing Portal</span>
+        </div>
+      </a>
+    </div>
+
+    <nav class="metro-nav" role="navigation" aria-label="Main Navigation">
+      <ul class="metro-nav-list">
+        <li>
+          <a href="?id=metro" class="metro-nav-link" ng-class="{'active': c.currentPage === 'metro'}">
+            <i class="fa fa-home" aria-hidden="true"></i> Home
+          </a>
+        </li>
+        <li>
+          <a href="?id=sc_cat_item&sys_id={{data.catItemSysId}}" class="metro-nav-link">
+            <i class="fa fa-ticket" aria-hidden="true"></i> Book Ticket
+          </a>
+        </li>
+        <li>
+          <a href="?id=my_metro_bookings" class="metro-nav-link" ng-class="{'active': c.currentPage === 'my_metro_bookings'}">
+            <i class="fa fa-qrcode" aria-hidden="true"></i> My Bookings
+            <span class="badge" ng-if="data.activeBookingsCount > 0">{{data.activeBookingsCount}}</span>
+          </a>
+        </li>
+      </ul>
+    </nav>
+
+    <div class="metro-user-profile">
+      <span class="metro-user-greeting">Welcome, <strong>{{data.userName}}</strong></span>
+      <span class="metro-user-role-badge">Passenger</span>
+    </div>
+  </div>
+</header>

@@ -1,0 +1,29 @@
+{
+  "id": "metro_confirmation",
+  "title": "Booking Confirmation - Metro Ticket",
+  "url_suffix": "metro-confirmation",
+  "scope": "x_mtts",
+  "public": false,
+  "roles": ["x_mtts.user", "snc_internal"],
+  "layout": "standard_fluid",
+  "containers": [
+    {
+      "order": 1,
+      "widgets": [
+        {
+          "widget_id": "widget_metro_portal_header",
+          "size": 12
+        }
+      ]
+    },
+    {
+      "order": 2,
+      "widgets": [
+        {
+          "widget_id": "widget_metro_confirmation",
+          "size": 12
+        }
+      ]
+    }
+  ]
+}

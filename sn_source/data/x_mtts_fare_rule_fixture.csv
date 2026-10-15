@@ -1,0 +1,5 @@
+rule_id,ticket_type_code,rate_per_km,minimum_fare,return_multiplier,fixed_fare,currency,effective_start,effective_end,active
+FR-SINGLE-01,SINGLE,2.50,10.00,,,USD,2026-01-01,,true
+FR-RETURN-01,RETURN,2.50,10.00,1.80,,USD,2026-01-01,,true
+FR-PASS-01,PASS,,,,50.00,USD,2026-01-01,,true
+FR-EXPIRED-01,SINGLE,2.00,8.00,,,USD,2025-01-01,2025-12-31,false

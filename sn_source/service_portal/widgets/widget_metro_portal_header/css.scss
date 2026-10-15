@@ -1,0 +1,103 @@
+.metro-header {
+  background: #1A365D;
+  color: #FFFFFF;
+  border-bottom: 3px solid #3182CE;
+  padding: 0.75rem 1.5rem;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+
+  .metro-header-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 1rem;
+  }
+
+  .metro-brand-link {
+    display: flex;
+    align-items: center;
+    text-decoration: none;
+    color: #FFFFFF;
+
+    .metro-logo-icon {
+      font-size: 2rem;
+      margin-right: 0.75rem;
+    }
+
+    .metro-brand-text {
+      display: flex;
+      flex-direction: column;
+
+      .metro-title {
+        font-size: 1.25rem;
+        font-weight: 700;
+        letter-spacing: 0.5px;
+      }
+
+      .metro-subtitle {
+        font-size: 0.75rem;
+        color: #CBD5E0;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+      }
+    }
+  }
+
+  .metro-nav-list {
+    display: flex;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    gap: 1rem;
+
+    .metro-nav-link {
+      color: #E2E8F0;
+      text-decoration: none;
+      padding: 0.5rem 0.85rem;
+      border-radius: 6px;
+      font-weight: 500;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+
+      &:hover, &.active {
+        background: #2B6CB0;
+        color: #FFFFFF;
+      }
+
+      .badge {
+        background: #E53E3E;
+        color: #FFFFFF;
+        font-size: 0.7rem;
+        padding: 0.15rem 0.4rem;
+        border-radius: 10px;
+      }
+    }
+  }
+
+  .metro-user-profile {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.9rem;
+
+    .metro-user-role-badge {
+      background: #2C5282;
+      color: #90CDF4;
+      padding: 0.2rem 0.5rem;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+  }
+}
+
+@media (max-width: 768px) {
+  .metro-header .metro-header-container {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
