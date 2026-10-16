@@ -34,6 +34,15 @@ function matchDoc(doc, filter) {
         if (doc[key] === val.$ne) return false;
         continue;
       }
+      if ('$type' in val) {
+        const expectedType = val.$type;
+        if (expectedType === 'string') {
+          if (typeof doc[key] !== 'string') return false;
+        } else if (expectedType === 'number') {
+          if (typeof doc[key] !== 'number') return false;
+        }
+        continue;
+      }
     }
 
     // Direct equality check
@@ -93,29 +102,78 @@ export class MemoryCollection {
   }
 
   async createIndex(keys, options = {}) {
-    this._indexes.push({ keys, options });
-    return Object.keys(keys).join('_');
+    const name = options.name || Object.keys(keys).join('_');
+    const existingIdx = this._indexes.findIndex(i => (i.options?.name === name || Object.keys(i.keys).join('_') === name));
+    if (existingIdx !== -1) {
+      this._indexes[existingIdx] = { keys, options: { ...options, name } };
+    } else {
+      this._indexes.push({ keys, options: { ...options, name } });
+    }
+    return name;
   }
 
   async createIndexes(indexSpecs) {
     for (const spec of indexSpecs) {
       await this.createIndex(spec.key, spec);
     }
-    return indexSpecs.map(s => Object.keys(s.key).join('_'));
+    return indexSpecs.map(s => s.name || Object.keys(s.key).join('_'));
+  }
+
+  async indexes() {
+    return this._indexes.map(i => ({
+      key: i.keys,
+      name: i.options?.name || Object.keys(i.keys).join('_'),
+      ...i.options
+    }));
+  }
+
+  async dropIndex(name) {
+    const idx = this._indexes.findIndex(i => 
+      (i.options?.name === name || Object.keys(i.keys).join('_') === name)
+    );
+    if (idx !== -1) {
+      this._indexes.splice(idx, 1);
+      return true;
+    }
+    return false;
   }
 
   _checkUniqueIndexes(newDoc, ignoreId = null) {
     for (const idx of this._indexes) {
       if (idx.options && idx.options.unique) {
+        // Evaluate partialFilterExpression if present
+        if (idx.options.partialFilterExpression) {
+          if (!matchDoc(newDoc, idx.options.partialFilterExpression)) {
+            continue; // Skip uniqueness enforcement for non-matching documents
+          }
+        }
+
         for (const field of Object.keys(idx.keys)) {
           const val = newDoc[field];
+
+          // Sparse index skips null and undefined
+          if (idx.options.sparse && (val === undefined || val === null)) {
+            continue;
+          }
+
           if (val !== undefined && val !== null) {
             const collision = this._docs.find(d => 
               (ignoreId ? d._id !== ignoreId && d.id !== ignoreId : true) && 
               d[field] === val
             );
             if (collision) {
-              const err = new Error(`E11000 duplicate key error collection: ${this.name} index: ${field}_1 dup key: { ${field}: "${val}" }`);
+              const err = new Error(`E11000 duplicate key error collection: ${this.name} index: ${idx.options.name || field + '_1'} dup key: { ${field}: "${val}" }`);
+              err.code = 11000;
+              throw err;
+            }
+          } else if (!idx.options.sparse && !idx.options.partialFilterExpression) {
+            // Standard unique index treats null/undefined as a value
+            const collision = this._docs.find(d => 
+              (ignoreId ? d._id !== ignoreId && d.id !== ignoreId : true) && 
+              (d[field] === undefined || d[field] === null)
+            );
+            if (collision) {
+              const err = new Error(`E11000 duplicate key error collection: ${this.name} index: ${idx.options.name || field + '_1'} dup key: { ${field}: null }`);
               err.code = 11000;
               throw err;
             }

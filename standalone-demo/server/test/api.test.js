@@ -1,6 +1,7 @@
 import assert from 'assert';
 import { startServer } from '../index.js';
 import { getCollection, getDbInfo, closeDb, connectDb, sanitizeMongoUri } from '../db/index.js';
+import { findDuplicateStringTicketNumbers, migrateBookingsTicketIndex } from '../db/schema.js';
 import { config } from '../config.js';
 import { generateApproverToken, verifyApproverToken } from '../middleware/auth.js';
 
@@ -724,7 +725,45 @@ async function runTests() {
     assert.strictEqual(duplicateRejected, true);
   });
 
-  await test('MongoDB enforces sparse unique constraint on ticket_number (duplicate rejected)', async () => {
+  await test('MongoDB allows multiple bookings with ticket_number: null under unique partial index', async () => {
+    const bookingsCol = getCollection('bookings');
+    const bkg1 = {
+      id: `bkg-null-1-${Date.now()}`,
+      session_id: 'test-partial-index',
+      booking_reference: `MTTS-NULL-1-${Date.now()}`,
+      ticket_number: null,
+      status: 'Pending'
+    };
+    const bkg2 = {
+      id: `bkg-null-2-${Date.now()}`,
+      session_id: 'test-partial-index',
+      booking_reference: `MTTS-NULL-2-${Date.now()}`,
+      ticket_number: null,
+      status: 'Pending'
+    };
+    const bkg3 = {
+      id: `bkg-null-3-${Date.now()}`,
+      session_id: 'test-partial-index',
+      booking_reference: `MTTS-NULL-3-${Date.now()}`,
+      ticket_number: null,
+      status: 'Pending'
+    };
+
+    // All three pending bookings with ticket_number: null must succeed without index collision
+    await bookingsCol.insertOne(bkg1);
+    await bookingsCol.insertOne(bkg2);
+    await bookingsCol.insertOne(bkg3);
+
+    const doc1 = await bookingsCol.findOne({ id: bkg1.id });
+    const doc2 = await bookingsCol.findOne({ id: bkg2.id });
+    const doc3 = await bookingsCol.findOne({ id: bkg3.id });
+
+    assert.ok(doc1 && doc1.ticket_number === null);
+    assert.ok(doc2 && doc2.ticket_number === null);
+    assert.ok(doc3 && doc3.ticket_number === null);
+  });
+
+  await test('MongoDB enforces unique constraint on string ticket_number (duplicate string ticket rejected)', async () => {
     const bookingsCol = getCollection('bookings');
     let duplicateRejected = false;
     try {
@@ -732,7 +771,7 @@ async function runTests() {
         id: `bkg-dup2-${Date.now()}`,
         session_id: 'test-collision',
         booking_reference: `MTTS-NEW-${Date.now()}`,
-        ticket_number: issuedTicketNumber, // duplicate
+        ticket_number: issuedTicketNumber, // duplicate of issuedTicketNumber (string)
         status: 'Ticket Issued'
       });
     } catch (err) {
@@ -759,6 +798,39 @@ async function runTests() {
       }
     }
     assert.strictEqual(duplicateRejected, true);
+  });
+
+  await test('migrateBookingsTicketIndex is idempotent and recognizes correctly configured index', async () => {
+    const bookingsCol = getCollection('bookings');
+    // Calling migration when index is already correct should succeed without error
+    await migrateBookingsTicketIndex(bookingsCol);
+    const indexes = await bookingsCol.indexes();
+    const ticketIdx = indexes.find(i => i.name === 'idx_bookings_ticket_number_unique');
+    assert.ok(ticketIdx);
+    assert.strictEqual(ticketIdx.unique, true);
+    assert.strictEqual(ticketIdx.partialFilterExpression?.ticket_number?.$type, 'string');
+  });
+
+  await test('migrateBookingsTicketIndex halts safely if duplicate string ticket numbers are detected', async () => {
+    const { MemoryCollection } = await import('../db/memoryMongo.js');
+    const mockCol = new MemoryCollection('bookings_dup_test');
+    await mockCol.insertOne({ id: 'bkg-1', ticket_number: 'TKT-COLLISION-999' });
+    await mockCol.insertOne({ id: 'bkg-2', ticket_number: 'TKT-COLLISION-999' }); // duplicate!
+
+    const duplicates = await findDuplicateStringTicketNumbers(mockCol);
+    assert.strictEqual(duplicates.length, 1);
+    assert.strictEqual(duplicates[0].ticket_number, 'TKT-COLLISION-999');
+    assert.strictEqual(duplicates[0].count, 2);
+
+    let migrationThrew = false;
+    try {
+      await migrateBookingsTicketIndex(mockCol);
+    } catch (err) {
+      if (err.message.includes('Index migration halted') && err.message.includes('duplicate string ticket numbers exist')) {
+        migrationThrew = true;
+      }
+    }
+    assert.strictEqual(migrationThrew, true, 'Migration must halt safely on duplicates without modifying records');
   });
 
   // Teardown server
