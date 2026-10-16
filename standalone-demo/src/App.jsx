@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import Header from './components/Header';
 import BookingForm from './components/BookingForm';
 import BookingsList from './components/BookingsList';
+import ApproverPortal from './components/ApproverPortal';
 import TurnstileScanner from './components/TurnstileScanner';
 import ArchitectureView from './components/ArchitectureView';
 import WorkflowModal from './components/WorkflowModal';
@@ -12,6 +13,7 @@ import { fetchBookings, createBookingApi, fetchHealth } from './services/api';
 export default function App() {
   const [activeTab, setActiveTab] = useState('book');
   const [bookings, setBookings] = useState(() => getBookings());
+  const [pendingApprovalsCount, setPendingApprovalsCount] = useState(0);
   const [backendStatus, setBackendStatus] = useState(null);
   const [activeTicketModal, setActiveTicketModal] = useState(null);
   const [workflowState, setWorkflowState] = useState({
@@ -22,18 +24,27 @@ export default function App() {
   });
   const [scannerPreselectedTicket, setScannerPreselectedTicket] = useState('');
 
+  // Count pending bookings across state
+  const calculatePendingCount = (items) => {
+    if (!Array.isArray(items)) return 0;
+    return items.filter(b => b.status === 'Pending' || b.status === 'Pending Approval' || b.display_status === 'Pending Approval').length;
+  };
+
   // Reload bookings from backend REST API (with localStorage fallback)
   const refreshBookings = async () => {
     try {
       const data = await fetchBookings();
       if (data && Array.isArray(data.bookings)) {
         setBookings(data.bookings);
+        setPendingApprovalsCount(calculatePendingCount(data.bookings));
         return;
       }
     } catch (err) {
       console.warn('[MTTS] Could not fetch bookings from REST API, using local storage cache:', err.message);
     }
-    setBookings(getBookings());
+    const local = getBookings();
+    setBookings(local);
+    setPendingApprovalsCount(calculatePendingCount(local));
   };
 
   // Check backend health on initial mount
@@ -48,26 +59,18 @@ export default function App() {
     refreshBookings();
   }, []);
 
-  // Submit booking and trigger simulated Flow Designer & REST API persistence
+  // Submit booking and trigger simulated Flow Designer & REST API persistence in Pending state
   const handleBookingSubmit = async (formData, calculation) => {
     setWorkflowState({
       isOpen: true,
-      stepData: { currentStep: 1, totalSteps: 5, stepInfo: { status: 'Initializing Service Catalog submission...' } },
+      stepData: { currentStep: 1, totalSteps: 3, stepInfo: { status: 'Initializing Service Catalog submission...' } },
       isComplete: false,
       createdBooking: null
     });
 
     try {
-      // Execute the simulated ServiceNow Flow Designer visual journey
-      const localBooking = await executeBookingWorkflow(formData, calculation, (progress) => {
-        setWorkflowState(prev => ({
-          ...prev,
-          stepData: progress
-        }));
-      });
-
-      // Persist authoritatively via Express REST API to PostgreSQL
-      let savedBooking = localBooking;
+      // Persist authoritatively via Express REST API to MongoDB
+      let savedBooking = null;
       try {
         const apiRes = await createBookingApi(formData);
         if (apiRes && apiRes.booking) {
@@ -77,30 +80,46 @@ export default function App() {
         console.warn('[MTTS] Backend API persistence failed, using local simulation result:', apiErr.message);
       }
 
+      // Execute visual journey across Service Catalog & Flow Designer state guards
+      const localBooking = await executeBookingWorkflow(formData, calculation, (progress) => {
+        setWorkflowState(prev => ({
+          ...prev,
+          stepData: progress
+        }));
+      });
+
+      const finalBooking = savedBooking || localBooking;
+
       setWorkflowState(prev => ({
         ...prev,
         isComplete: true,
-        createdBooking: savedBooking
+        createdBooking: finalBooking
       }));
 
       await refreshBookings();
     } catch (err) {
-      console.error('Workflow simulation error', err);
+      console.error('Workflow submission error', err);
     }
   };
 
-  const handleFinishWorkflow = () => {
-    const booking = workflowState.createdBooking;
+  const handleCloseWorkflowToBookings = () => {
     setWorkflowState({
       isOpen: false,
       stepData: null,
       isComplete: false,
       createdBooking: null
     });
-    if (booking) {
-      setActiveTicketModal(booking);
-      setActiveTab('bookings');
-    }
+    setActiveTab('bookings');
+  };
+
+  const handleOpenApproverFromWorkflow = () => {
+    setWorkflowState({
+      isOpen: false,
+      stepData: null,
+      isComplete: false,
+      createdBooking: null
+    });
+    setActiveTab('approvals');
   };
 
   const handleTestInScanner = (booking) => {
@@ -115,7 +134,8 @@ export default function App() {
       <Header
         activeTab={activeTab}
         setActiveTab={setActiveTab}
-        bookingsCount={bookings.filter(b => b.status === 'Ticket Issued').length}
+        bookingsCount={bookings.filter(b => (b.status === 'Ticket Issued' || b.status === 'Generated' || b.display_status === 'Ticket Issued') && b.ticket_number).length}
+        pendingApprovalsCount={pendingApprovalsCount}
         backendStatus={backendStatus}
       />
 
@@ -130,6 +150,13 @@ export default function App() {
             bookings={bookings}
             onSelectTicket={(b) => setActiveTicketModal(b)}
             onBookingsUpdated={refreshBookings}
+          />
+        )}
+
+        {activeTab === 'approvals' && (
+          <ApproverPortal
+            onBookingApproved={refreshBookings}
+            onPendingCountChange={(cnt) => setPendingApprovalsCount(cnt)}
           />
         )}
 
@@ -150,7 +177,9 @@ export default function App() {
         isOpen={workflowState.isOpen}
         stepData={workflowState.stepData}
         isComplete={workflowState.isComplete}
-        onCompleteViewTicket={handleFinishWorkflow}
+        createdBooking={workflowState.createdBooking}
+        onCompleteViewBookings={handleCloseWorkflowToBookings}
+        onOpenApproverPortal={handleOpenApproverFromWorkflow}
       />
 
       {/* Digital QR Ticket Pass Modal */}

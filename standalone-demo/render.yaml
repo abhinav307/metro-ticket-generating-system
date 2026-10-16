@@ -16,3 +16,11 @@ services:
         value: mtts_transit_db
       - key: CORS_ORIGIN
         value: "*"
+      - key: APPROVER_USERNAME
+        sync: false
+      - key: APPROVER_PASSWORD
+        sync: false
+      - key: SESSION_SECRET
+        sync: false
+      - key: CANCELLATION_POLICY_STATUS
+        value: UNCONFIGURED

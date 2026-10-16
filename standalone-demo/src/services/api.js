@@ -6,6 +6,24 @@
  */
 
 const SESSION_STORAGE_KEY = 'mtts_demo_session_id';
+const APPROVER_TOKEN_KEY = 'mtts_approver_token';
+
+export function getApproverToken() {
+  return sessionStorage.getItem(APPROVER_TOKEN_KEY) || localStorage.getItem(APPROVER_TOKEN_KEY) || '';
+}
+
+export function setApproverToken(token) {
+  if (token) {
+    sessionStorage.setItem(APPROVER_TOKEN_KEY, token);
+  } else {
+    clearApproverToken();
+  }
+}
+
+export function clearApproverToken() {
+  sessionStorage.removeItem(APPROVER_TOKEN_KEY);
+  localStorage.removeItem(APPROVER_TOKEN_KEY);
+}
 
 // Retrieve or generate a visitor session identifier
 export function getOrCreateSessionId() {
@@ -21,9 +39,11 @@ export function getOrCreateSessionId() {
 // Low-level fetch wrapper with session tracking and error parsing
 async function apiRequest(path, options = {}) {
   const sessionId = getOrCreateSessionId();
+  const approverToken = getApproverToken();
   const headers = {
     'Content-Type': 'application/json',
     'X-Demo-Session-ID': sessionId,
+    ...(approverToken ? { 'Authorization': `Bearer ${approverToken}` } : {}),
     ...(options.headers || {})
   };
 
@@ -123,3 +143,46 @@ export async function verifyTicketApi({ ticketNumber, gateId = 'GATE-NORTH-01', 
 export async function fetchScanEvents() {
   return apiRequest('/api/scanner/events');
 }
+
+// 10. Approver Authentication APIs
+export async function approverLoginApi({ username, password }) {
+  const data = await apiRequest('/api/approvals/login', {
+    method: 'POST',
+    body: JSON.stringify({ username, password })
+  });
+  if (data && data.token) {
+    setApproverToken(data.token);
+  }
+  return data;
+}
+
+export async function approverLogoutApi() {
+  try {
+    await apiRequest('/api/approvals/logout', { method: 'POST' });
+  } finally {
+    clearApproverToken();
+  }
+}
+
+export async function fetchApproverMeApi() {
+  return apiRequest('/api/approvals/me');
+}
+
+// 11. Station Duty Approver Operations
+export async function fetchPendingApprovalsApi() {
+  return apiRequest('/api/approvals/pending');
+}
+
+export async function approveBookingApi(bookingId) {
+  return apiRequest(`/api/bookings/${bookingId}/approve`, {
+    method: 'POST'
+  });
+}
+
+export async function rejectBookingApi(bookingId, reason) {
+  return apiRequest(`/api/bookings/${bookingId}/reject`, {
+    method: 'POST',
+    body: JSON.stringify({ reason })
+  });
+}
+

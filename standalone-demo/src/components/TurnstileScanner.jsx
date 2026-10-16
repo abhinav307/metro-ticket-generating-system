@@ -10,10 +10,11 @@ export default function TurnstileScanner({ bookings, preselectedTicket }) {
   const [events, setEvents] = useState(() => getScanEvents());
   const [isGateOpen, setIsGateOpen] = useState(false);
 
-  const issuedBookings = bookings.filter(b => b.status === 'Ticket Issued');
-  const cancelledBookings = bookings.filter(b => b.status === 'Cancelled');
+  const issuedBookings = bookings.filter(b => (b.status === 'Ticket Issued' || b.status === 'Generated' || b.display_status === 'Ticket Issued') && b.ticket_number);
+  const cancelledBookings = bookings.filter(b => b.status === 'Cancelled' || b.approval_status === 'rejected');
+  const pendingBookings = bookings.filter(b => b.status === 'Pending' || b.status === 'Pending Approval' || b.display_status === 'Pending Approval');
 
-  // Load persistent scan events from PostgreSQL backend on mount
+  // Load persistent scan events from MongoDB backend on mount
   const refreshScanHistory = async () => {
     try {
       const data = await fetchScanEvents();
@@ -163,6 +164,19 @@ export default function TurnstileScanner({ bookings, preselectedTicket }) {
                 <span>{b.ticket_number} (Valid)</span>
               </button>
             ))}
+
+            {pendingBookings.length > 0 && (
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                style={{ borderColor: 'rgba(245, 158, 11, 0.4)', color: '#fbbf24' }}
+                onClick={() => handleQuickSelect(pendingBookings[0].booking_reference)}
+                title="Scan an unapproved pending booking to test turnstile gate hold"
+              >
+                <Clock size={13} />
+                <span>{pendingBookings[0].booking_reference} (Hold: Pending Approval)</span>
+              </button>
+            )}
 
             {cancelledBookings.length > 0 && (
               <button

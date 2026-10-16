@@ -198,6 +198,40 @@ export class MemoryCollection {
     };
   }
 
+  async findOneAndUpdate(filter, update, options = {}) {
+    const docIndex = this._docs.findIndex(d => matchDoc(d, filter));
+    if (docIndex === -1) {
+      return null;
+    }
+
+    const doc = this._docs[docIndex];
+    const updated = { ...doc };
+
+    if (update.$set) {
+      Object.assign(updated, update.$set);
+    }
+
+    if (update.$inc) {
+      for (const [key, incVal] of Object.entries(update.$inc)) {
+        updated[key] = (updated[key] || 0) + incVal;
+      }
+    }
+
+    if (update.$currentDate) {
+      for (const key of Object.keys(update.$currentDate)) {
+        updated[key] = new Date().toISOString();
+      }
+    }
+
+    this._checkUniqueIndexes(updated, doc._id);
+    this._docs[docIndex] = updated;
+
+    if (options.returnDocument === 'before') {
+      return { ...doc };
+    }
+    return { ...updated };
+  }
+
   async countDocuments(filter = {}) {
     return this._docs.filter(d => matchDoc(d, filter)).length;
   }

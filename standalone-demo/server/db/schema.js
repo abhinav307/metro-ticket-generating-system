@@ -29,8 +29,14 @@ export const COLLECTION_INDEXES = {
   bookings: [
     { key: { id: 1 }, unique: true, name: 'idx_bookings_id_unique' },
     { key: { booking_reference: 1 }, unique: true, name: 'idx_bookings_reference_unique' },
-    { key: { ticket_number: 1 }, unique: true, name: 'idx_bookings_ticket_number_unique' },
-    { key: { session_id: 1, created_at: -1 }, name: 'idx_bookings_session_created' }
+    { key: { ticket_number: 1 }, unique: true, sparse: true, name: 'idx_bookings_ticket_number_unique' },
+    { key: { session_id: 1, created_at: -1 }, name: 'idx_bookings_session_created' },
+    { key: { status: 1, approval_status: 1 }, name: 'idx_bookings_status_approval' }
+  ],
+  approvals: [
+    { key: { id: 1 }, unique: true, name: 'idx_approvals_id_unique' },
+    { key: { booking_id: 1 }, unique: true, name: 'idx_approvals_booking_id_unique' },
+    { key: { decision: 1, created_at: -1 }, name: 'idx_approvals_decision' }
   ],
   scan_events: [
     { key: { id: 1 }, unique: true, name: 'idx_scan_events_id_unique' },

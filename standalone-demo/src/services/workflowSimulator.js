@@ -101,7 +101,7 @@ export function simulateHash(input) {
 
 // Full ServiceNow Flow Designer Execution Simulation
 export async function executeBookingWorkflow(formData, calculation, onProgress) {
-  const { bookingReference, ticketNumber } = generateReferenceNumbers();
+  const { bookingReference } = generateReferenceNumbers();
   const sourceStation = STATIONS.find(s => s.code === formData.sourceStationCode);
   const destStation = STATIONS.find(s => s.code === formData.destinationStationCode);
 
@@ -120,21 +120,9 @@ export async function executeBookingWorkflow(formData, calculation, onProgress) 
     },
     {
       step: 3,
-      title: 'Flow Designer: Station Approver Review',
-      status: 'Triggering x_mtts.MetroBookingApprovalAndFulfillmentFlow...',
-      log: `[FlowDesigner] Step 2.1: Created sysapproval_approver assigned to 'Metro Station Approvers'. Approver automated auto-check: Origin != Destination (VERIFIED), Tariff rule valid (VERIFIED). Status: APPROVED.`
-    },
-    {
-      step: 4,
-      title: 'Ticket Fulfillment & Cryptographic Minting',
-      status: 'Executing x_mtts.MetroTicketGenerator & QR Token Hashing...',
-      log: `[MetroTicketGenerator] Minting Ticket ${ticketNumber}. Generating HMAC-SHA256 token hash with constant-time verification payload. Ticket status set to 'Ticket Issued'.`
-    },
-    {
-      step: 5,
-      title: 'Notification Event Registry',
-      status: 'Queuing sysevent_register: x_mtts.ticket.generated...',
-      log: `[NotificationService] Event 'x_mtts.ticket.generated' queued. Email dispatch prepared with attached SVG QR Pass and portal self-service link.`
+      title: 'Queued for Station Approver Review',
+      status: 'Creating sysapproval_approver queue entry...',
+      log: `[FlowDesigner] Step 2.1: Created sysapproval_approver assigned to 'Metro Station Approvers'. Booking held in 'Pending' status. Ticket number and QR token held until approver authorization.`
     }
   ];
 
@@ -146,18 +134,13 @@ export async function executeBookingWorkflow(formData, calculation, onProgress) 
         stepInfo: steps[i]
       });
     }
-    // Simulate real platform async execution delay (450ms per step)
-    await new Promise(r => setTimeout(r, 450));
+    await new Promise(r => setTimeout(r, 400));
   }
-
-  const rawToken = `${bookingReference}:${ticketNumber}:${Date.now()}`;
-  const qrHash = simulateHash(rawToken);
-  const qrPayload = `MTTS|${ticketNumber}|${bookingReference}|${qrHash.slice(0, 8)}|${formData.travelDate}|${sourceStation?.code}|${destStation?.code}|${calculation.passengerCount}|${calculation.ticketType.code}|PAID`;
 
   const newBooking = {
     id: `bkg-${Date.now()}`,
     booking_reference: bookingReference,
-    ticket_number: ticketNumber,
+    ticket_number: null,
     commuter_name: formData.commuterName || 'Registered Commuter',
     commuter_email: formData.commuterEmail || 'commuter@metro.internal',
     source_station_code: sourceStation?.code,
@@ -171,16 +154,69 @@ export async function executeBookingWorkflow(formData, calculation, onProgress) 
     distance_km: calculation.distanceKm,
     unit_fare: calculation.unitFare,
     total_fare: calculation.totalFare,
-    status: 'Ticket Issued',
+    status: 'Pending',
+    display_status: 'Pending Approval',
+    approval_status: 'pending',
     payment_status: 'PAID',
-    issued_at: new Date().toISOString().replace('T', ' ').slice(0, 19),
-    qr_token_hash: qrHash,
-    qr_payload: qrPayload,
+    issued_at: null,
+    qr_token_hash: null,
+    qr_payload: null,
     scans_count: 0
   };
 
   saveBooking(newBooking);
   return newBooking;
+}
+
+// Simulated Approver Action: Approve
+export function approveBookingSimulator(bookingId, approverName = 'station_duty_manager') {
+  const bookings = getBookings();
+  const target = bookings.find(b => b.id === bookingId);
+  if (!target) return { success: false, error: 'Booking not found' };
+
+  const { ticketNumber } = generateReferenceNumbers();
+  const rawToken = `${target.booking_reference}:${ticketNumber}:${Date.now()}`;
+  const qrHash = simulateHash(rawToken);
+  const qrPayload = `MTTS|${ticketNumber}|${target.booking_reference}|${qrHash.slice(0, 8)}|${target.travel_date}|${target.source_station_code}|${target.destination_station_code}|${target.passenger_count}|${target.ticket_type_code}|PAID`;
+  const now = new Date().toISOString().replace('T', ' ').slice(0, 19);
+
+  const updated = updateBooking(bookingId, {
+    status: 'Generated',
+    display_status: 'Ticket Issued',
+    approval_status: 'approved',
+    approved_by: approverName,
+    approved_at: now,
+    ticket_number: ticketNumber,
+    issued_at: now,
+    qr_token_hash: qrHash,
+    qr_payload: qrPayload
+  });
+
+  return {
+    success: true,
+    booking: updated.find(b => b.id === bookingId)
+  };
+}
+
+// Simulated Approver Action: Reject
+export function rejectBookingSimulator(bookingId, reason = 'Administrative hold') {
+  const bookings = getBookings();
+  const target = bookings.find(b => b.id === bookingId);
+  if (!target) return { success: false, error: 'Booking not found' };
+
+  const now = new Date().toISOString().replace('T', ' ').slice(0, 19);
+  const updated = updateBooking(bookingId, {
+    status: 'Cancelled',
+    display_status: 'Rejected',
+    approval_status: 'rejected',
+    rejection_reason: reason,
+    cancelled_at: now
+  });
+
+  return {
+    success: true,
+    booking: updated.find(b => b.id === bookingId)
+  };
 }
 
 // Turnstile Scanner Verification Simulation
@@ -210,16 +246,21 @@ export function scanTicket(ticketNumberInput, gateId = 'GATE-SOUTH-03', stationC
       gateStatus = 'HOLD';
       httpCode = 404;
       message = 'Error 404: Unknown Ticket Number. Turnstile Gate Locked.';
-    } else if (matchedBooking.status === 'Cancelled') {
+    } else if (matchedBooking.status === 'Cancelled' || matchedBooking.approval_status === 'rejected') {
       outcome = 'TICKET_CANCELLED_OR_INVALID';
       gateStatus = 'HOLD';
       httpCode = 403;
-      message = 'Error 403: Boarding privilege revoked. Ticket is Cancelled.';
-    } else if (matchedBooking.status !== 'Ticket Issued') {
+      message = 'Error 403: Boarding privilege revoked. Ticket is Cancelled or Rejected.';
+    } else if (matchedBooking.status === 'Pending' || matchedBooking.approval_status === 'pending' || !matchedBooking.ticket_number) {
       outcome = 'TICKET_CANCELLED_OR_INVALID';
       gateStatus = 'HOLD';
       httpCode = 403;
-      message = `Error 403: Ticket status is '${matchedBooking.status}'. Pending approval.`;
+      message = 'Error 403: Gate Locked. Booking is pending approver authorization. No ticket issued.';
+    } else if (matchedBooking.status !== 'Ticket Issued' && matchedBooking.status !== 'Generated') {
+      outcome = 'TICKET_CANCELLED_OR_INVALID';
+      gateStatus = 'HOLD';
+      httpCode = 403;
+      message = `Error 403: Ticket status is '${matchedBooking.status}'. Not authorized for gate entry.`;
     } else {
       // Successful scan: increment scan count
       updateBooking(matchedBooking.id, {
@@ -258,28 +299,39 @@ export function scanTicket(ticketNumberInput, gateId = 'GATE-SOUTH-03', stationC
   };
 }
 
-// Cancellation & Refund Quote Simulation (MetroRefundCalculator)
-export function cancelBooking(bookingId, reason = 'Commuter requested refund') {
+// Cancellation & Refund Policy Simulation (Mirrors x_mtts.cancellation.policy_status)
+export function cancelBooking(bookingId, reason = 'Commuter schedule change', policyStatus = 'UNCONFIGURED') {
   const bookings = getBookings();
   const target = bookings.find(b => b.id === bookingId);
   if (!target) return { success: false, error: 'Booking not found' };
 
-  // Calculate refund
-  const refundRate = 0.80; // 80% refund standard
-  const refundAmount = +(target.total_fare * refundRate).toFixed(2);
+  let refundAmount = 0.00;
+  let refundRate = 0.0;
+  let refundStatus = 'POLICY_UNCONFIGURED';
+  let policyNotice = 'Cancellation policy is UNCONFIGURED. No refund authorized without formal policy approval. Turnstile boarding privileges permanently revoked.';
+
+  if (policyStatus === 'ACTIVE') {
+    refundRate = 0.80;
+    refundAmount = +(target.total_fare * refundRate).toFixed(2);
+    refundStatus = 'PROCESSED';
+    policyNotice = '80% refund processed under active policy.';
+  }
 
   const updated = updateBooking(bookingId, {
     status: 'Cancelled',
+    display_status: 'Cancelled',
     cancellation_reason: reason,
     cancelled_at: new Date().toISOString().replace('T', ' ').slice(0, 19),
     refund_amount: refundAmount,
-    refund_status: 'PROCESSED'
+    refund_status: refundStatus
   });
 
   return {
     success: true,
     booking: updated.find(b => b.id === bookingId),
     refundAmount,
-    refundRate
+    refundRate,
+    policyStatus,
+    policyNotice
   };
 }

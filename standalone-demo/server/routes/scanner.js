@@ -40,16 +40,21 @@ router.post('/verify', async (req, res, next) => {
         httpCode = 404;
         message = 'Error 404: Unknown Ticket Number. Turnstile Gate Locked.';
       } else {
-        if (matchedBooking.status === 'Cancelled') {
+        if (matchedBooking.status === 'Cancelled' || matchedBooking.approval_status === 'rejected') {
           outcome = 'TICKET_CANCELLED_OR_INVALID';
           gateStatus = 'HOLD';
           httpCode = 403;
-          message = 'Error 403: Boarding privilege revoked. Ticket is Cancelled.';
-        } else if (matchedBooking.status !== 'Ticket Issued') {
+          message = 'Error 403: Boarding privilege revoked. Ticket is Cancelled or Rejected.';
+        } else if (matchedBooking.status === 'Pending' || matchedBooking.approval_status === 'pending' || !matchedBooking.ticket_number) {
           outcome = 'TICKET_CANCELLED_OR_INVALID';
           gateStatus = 'HOLD';
           httpCode = 403;
-          message = `Error 403: Ticket status is '${matchedBooking.status}'. Pending approval.`;
+          message = 'Error 403: Gate Locked. Booking is pending approver authorization. No ticket issued.';
+        } else if (matchedBooking.status !== 'Generated' && matchedBooking.status !== 'Ticket Issued') {
+          outcome = 'TICKET_CANCELLED_OR_INVALID';
+          gateStatus = 'HOLD';
+          httpCode = 403;
+          message = `Error 403: Ticket status is '${matchedBooking.status}'. Not authorized for gate entry.`;
         } else {
           // Valid ticket: increment scan count and record last_scanned
           await bookingsCol.updateOne(
@@ -112,12 +117,14 @@ router.post('/verify', async (req, res, next) => {
 });
 
 // GET /api/scanner/events — Retrieve recent scan events from MongoDB
+// SECURITY CONTROL: Restricts system-wide audit logs to authenticated approvers; commuters view only own session.
 router.get('/events', async (req, res, next) => {
   try {
     const scanEventsCol = getCollection('scan_events');
     const stationsCol = getCollection('stations');
 
-    const events = await scanEventsCol.find({}).sort({ scan_timestamp: -1 }).limit(30).toArray();
+    const query = req.approver ? {} : { session_id: req.sessionId };
+    const events = await scanEventsCol.find(query).sort({ scan_timestamp: -1 }).limit(30).toArray();
 
     // Enrich with station_name if missing
     for (const ev of events) {

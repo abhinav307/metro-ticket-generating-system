@@ -30,7 +30,7 @@ This application combines a responsive React frontend with a high-performance **
 
 ## MongoDB Collections Schema
 
-The database model is organized into 6 document collections:
+The database model is organized into 7 document collections:
 
 1. **`stations` (`x_mtts_station`):**
    - Documents: Transit station codes (`STN-01` to `STN-09`), station names, line colors, zones, sequence orders.
@@ -45,10 +45,14 @@ The database model is organized into 6 document collections:
    - Documents: Tariffs ($2.50/km, $10.00 minimum fare threshold, 1.80x return discount multiplier).
    - Unique Index: `{ rule_id: 1 }` (unique constraint).
 5. **`bookings` (`x_mtts_booking_ticket`):**
-   - Documents: Persistent commuter transactions, session IDs, fare snapshots, HMAC-SHA256 token hashes, QR payloads.
-   - Unique Indexes: `{ id: 1 }`, `{ booking_reference: 1 }`, `{ ticket_number: 1 }`.
-   - Index: `{ session_id: 1, created_at: -1 }`.
-6. **`scan_events` (`x_mtts_scan_event`):**
+   - Documents: Persistent commuter transactions, session IDs, financial snapshots, lifecycle states (`Pending`, `Generated`, `Cancelled`), HMAC-SHA256 token hashes, QR payloads.
+   - Unique Indexes: `{ id: 1 }`, `{ booking_reference: 1 }`, `{ ticket_number: 1 }` (sparse unique constraint — null for pending bookings).
+   - Indexes: `{ session_id: 1, created_at: -1 }`, `{ status: 1, approval_status: 1 }`.
+6. **`approvals` (`sysapproval_approver`):**
+   - Documents: Approver queue records, decisions (`pending`, `approved`, `rejected`), assigned approver identities, audit timestamps, rejection reasons.
+   - Unique Indexes: `{ id: 1 }`, `{ booking_id: 1 }`.
+   - Index: `{ decision: 1, created_at: -1 }`.
+7. **`scan_events` (`x_mtts_scan_event`):**
    - Documents: Append-only turnstile gate audit logs, correlation IDs, response latencies, cryptographic checksums.
    - Unique Index: `{ id: 1 }`.
    - Indexes: `{ ticket_number: 1 }`, `{ session_id: 1 }`, `{ scan_timestamp: -1 }`.
@@ -64,10 +68,16 @@ The database model is organized into 6 document collections:
 | `GET` | `/api/routes` | Active route matrix with official track distances | `x_mtts_route` |
 | `POST` | `/api/fare/calculate` | Authoritative server-side tariff & discount calculation | `MetroFareCalculator` |
 | `GET` | `/api/bookings` | Retrieve bookings for current visitor session (`X-Demo-Session-ID`) | `x_mtts_booking_ticket` |
-| `POST` | `/api/bookings` | Authoritatively mint booking, HMAC token, and QR payload in MongoDB | Flow Designer Step 4 |
+| `POST` | `/api/bookings` | Create booking in `Pending` state with financial snapshot (no ticket minted) | Flow Designer Submission |
+| `POST` | `/api/approvals/login` | Authenticate Station Duty Approver (`x_mtts.approver`) | Approver Session Auth |
+| `POST` | `/api/approvals/logout` | Terminate approver session | Approver Session Auth |
+| `GET` | `/api/approvals/me` | Retrieve active approver session details | Session Identity |
+| `GET` | `/api/approvals/pending` | Fetch queue of pending bookings awaiting review (requires approver role) | `sysapproval_approver` |
+| `POST` | `/api/bookings/:id/approve` | Authorize booking, mint sequential ticket number & QR token (requires approver) | Flow Designer Fulfillment |
+| `POST` | `/api/bookings/:id/reject` | Reject booking with mandatory reason, cancel request (requires approver) | Approval Decline |
 | `POST` | `/api/bookings/:id/cancel` | Cancel booking and compute 80% refund policy | `MetroRefundCalculator` |
 | `POST` | `/api/scanner/verify` | Turnstile REST API ticket validation (returns 200, 401, 403, 404) | `/api/x_mtts/scanner/verify-ticket` |
-| `GET` | `/api/scanner/events` | Append-only turnstile audit log ledger in MongoDB | `x_mtts_scan_event` |
+| `GET` | `/api/scanner/events` | Append-only turnstile audit log ledger (commuter session or approver system-wide) | `x_mtts_scan_event` |
 
 ---
 

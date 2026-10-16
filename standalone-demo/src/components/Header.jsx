@@ -1,7 +1,7 @@
 import React from 'react';
 import { Train, Ticket, ShieldCheck, QrCode, Layers, Info } from 'lucide-react';
 
-export default function Header({ activeTab, setActiveTab, bookingsCount, backendStatus }) {
+export default function Header({ activeTab, setActiveTab, bookingsCount, pendingApprovalsCount, backendStatus }) {
   const isBackendHealthy = backendStatus?.status === 'ok';
 
   return (
@@ -55,6 +55,17 @@ export default function Header({ activeTab, setActiveTab, bookingsCount, backend
             <span>My Bookings</span>
             {bookingsCount > 0 && (
               <span className="tab-badge">{bookingsCount}</span>
+            )}
+          </button>
+
+          <button
+            className={`nav-tab-btn ${activeTab === 'approvals' ? 'active' : ''}`}
+            onClick={() => setActiveTab('approvals')}
+          >
+            <ShieldCheck size={16} />
+            <span>Station Approvals</span>
+            {pendingApprovalsCount > 0 && (
+              <span className="tab-badge" style={{ background: '#d97706' }}>{pendingApprovalsCount}</span>
             )}
           </button>
 

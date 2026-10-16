@@ -2,17 +2,21 @@ import express from 'express';
 import crypto from 'crypto';
 import { getCollection } from '../db/index.js';
 import { lookupRouteDistance } from './fare.js';
+import { requireApprover } from '../middleware/auth.js';
+import { config } from '../config.js';
 
 const router = express.Router();
 
-function generateIdentifiers() {
+function generateBookingReference() {
   const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-  const randNum1 = Math.floor(10000 + Math.random() * 90000);
-  const randNum2 = Math.floor(10000 + Math.random() * 90000);
-  return {
-    bookingReference: `MTTS-${dateStr}-${randNum1}`,
-    ticketNumber: `TKT-${dateStr}-${randNum2}`
-  };
+  const randNum = Math.floor(10000 + Math.random() * 90000);
+  return `MTTS-${dateStr}-${randNum}`;
+}
+
+function generateTicketNumber() {
+  const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+  const randNum = Math.floor(10000 + Math.random() * 90000);
+  return `TKT-${dateStr}-${randNum}`;
 }
 
 function computeTokenHash(tokenString) {
@@ -40,7 +44,8 @@ router.get('/', async (req, res, next) => {
   }
 });
 
-// POST /api/bookings — Create booking document in MongoDB with authoritative fare and cryptographic token
+// POST /api/bookings — Create booking in MongoDB in 'Pending' lifecycle state
+// INVARIANT: No ticket number or QR token is generated at submission time.
 router.post('/', async (req, res, next) => {
   try {
     const sessionId = req.sessionId;
@@ -92,70 +97,262 @@ router.post('/', async (req, res, next) => {
     }
 
     const totalFare = +(unitFare * count).toFixed(2);
-    const { bookingReference, ticketNumber } = generateIdentifiers();
-
-    const rawToken = `${bookingReference}:${ticketNumber}:${Date.now()}`;
-    const qrTokenHash = computeTokenHash(rawToken);
-    const qrPayload = `MTTS|${ticketNumber}|${bookingReference}|${qrTokenHash.slice(0, 8)}|${travelDate}|${sourceStationCode}|${destinationStationCode}|${count}|${tt.code}|PAID`;
+    const bookingReference = generateBookingReference();
     const bookingId = `bkg-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+    const now = new Date().toISOString();
 
     const srcStation = await stationsCol.findOne({ code: sourceStationCode });
     const destStation = await stationsCol.findOne({ code: destinationStationCode });
 
+    // Initial lifecycle record: Status is strictly 'Pending', ticket material is null
     const newBooking = {
       id: bookingId,
       session_id: sessionId,
       booking_reference: bookingReference,
-      ticket_number: ticketNumber,
+      ticket_number: null, // Guard: No ticket issued before approval
       commuter_name: commuterName || 'Registered Commuter',
       commuter_email: commuterEmail || 'commuter@metro.internal',
       source_station_code: sourceStationCode,
       source_station_name: srcStation?.name || sourceStationCode,
       destination_station_code: destinationStationCode,
       destination_station_name: destStation?.name || destinationStationCode,
-      travel_date: travelDate || new Date().toISOString().slice(0, 10),
+      travel_date: travelDate || now.slice(0, 10),
       ticket_type_code: tt.code,
       ticket_type_name: tt.name,
       passenger_count: count,
       distance_km: distanceKm,
       unit_fare: unitFare,
       total_fare: totalFare,
-      status: 'Ticket Issued',
-      payment_status: 'PAID',
-      qr_token_hash: qrTokenHash,
-      qr_payload: qrPayload,
+      currency_code: 'USD',
+      status: 'Pending', // Four-status lifecycle initial baseline
+      display_status: 'Pending Approval',
+      approval_status: 'pending',
+      payment_status: 'PAID', // Financial snapshot recorded
+      qr_token_hash: null, // Guard: No QR token hash before approval
+      qr_payload: null, // Guard: No QR payload before approval
       scans_count: 0,
-      created_at: new Date().toISOString()
+      created_at: now,
+      updated_at: now
     };
 
     const bookingsCol = getCollection('bookings');
     await bookingsCol.insertOne(newBooking);
 
+    // Create persistent approval item in approvals collection
+    const approvalsCol = getCollection('approvals');
+    await approvalsCol.insertOne({
+      id: `appr-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      booking_id: bookingId,
+      booking_reference: bookingReference,
+      commuter_name: newBooking.commuter_name,
+      commuter_email: newBooking.commuter_email,
+      source_station_name: newBooking.source_station_name,
+      destination_station_name: newBooking.destination_station_name,
+      travel_date: newBooking.travel_date,
+      passenger_count: newBooking.passenger_count,
+      total_fare: newBooking.total_fare,
+      ticket_type_name: newBooking.ticket_type_name,
+      session_id: sessionId,
+      decision: 'pending',
+      decision_by: null,
+      decision_time: null,
+      rejection_reason: null,
+      created_at: now
+    });
+
     res.status(201).json({
       success: true,
       booking: newBooking,
-      simulated_workflow: {
-        flow_designer: 'x_mtts.MetroBookingApprovalAndFulfillmentFlow',
-        status: 'Completed',
-        steps: [
-          'Service Catalog request created (sc_req_item)',
-          'Financial snapshotting locked (BR_Booking_FinancialSnapshot)',
-          'Station Duty Manager review approved (sysapproval_approver)',
-          'HMAC-SHA256 Token hash minted (MetroTicketGenerator.js)',
-          'Notification queued (x_mtts.ticket.generated)'
-        ]
-      }
+      message: 'Booking submitted successfully and queued for Station Duty Approver review.'
     });
   } catch (err) {
     next(err);
   }
 });
 
-// POST /api/bookings/:id/cancel — Demonstrate ticket cancellation and refund quote in MongoDB
+// POST /api/bookings/:id/approve — Authenticated Station Duty Approver approval & ticket issuance
+router.post('/:id/approve', requireApprover, async (req, res, next) => {
+  try {
+    const bookingId = req.params.id;
+    const bookingsCol = getCollection('bookings');
+    const approvalsCol = getCollection('approvals');
+
+    const booking = await bookingsCol.findOne({ id: bookingId });
+    if (!booking) {
+      return res.status(404).json({ error: 'Booking not found.' });
+    }
+
+    // Conflict of interest enforcement: Commuter cannot approve their own booking
+    const isOwnerSession = booking.session_id === req.sessionId;
+    const isOwnerEmail = booking.commuter_email && req.approver && 
+      booking.commuter_email.toLowerCase() === req.approver.username.toLowerCase();
+
+    if (isOwnerSession || isOwnerEmail) {
+      return res.status(403).json({
+        error: 'Conflict of interest: Commuters are strictly prohibited from approving their own bookings.'
+      });
+    }
+
+    // State machine guard: Only 'Pending' bookings can be approved
+    if (booking.status !== 'Pending') {
+      return res.status(409).json({
+        error: `Cannot approve booking in status '${booking.status}'. Only Pending bookings can be approved.`
+      });
+    }
+
+    // Allocate unique ticket number and mint cryptographic QR token
+    const ticketNumber = generateTicketNumber();
+    const rawToken = `${booking.booking_reference}:${ticketNumber}:${Date.now()}`;
+    const qrTokenHash = computeTokenHash(rawToken);
+    const qrPayload = `MTTS|${ticketNumber}|${booking.booking_reference}|${qrTokenHash.slice(0, 8)}|${booking.travel_date}|${booking.source_station_code}|${booking.destination_station_code}|${booking.passenger_count}|${booking.ticket_type_code}|PAID`;
+    const now = new Date().toISOString();
+
+    // Atomic update to prevent race conditions or duplicate issuance
+    const updatedBooking = await bookingsCol.findOneAndUpdate(
+      { id: bookingId, status: 'Pending' },
+      {
+        $set: {
+          status: 'Generated',
+          display_status: 'Ticket Issued',
+          approval_status: 'approved',
+          approved_by: req.approver.username,
+          approved_at: now,
+          ticket_number: ticketNumber,
+          qr_token_hash: qrTokenHash,
+          qr_payload: qrPayload,
+          generation_time: now,
+          updated_at: now
+        }
+      },
+      { returnDocument: 'after' }
+    );
+
+    if (!updatedBooking) {
+      return res.status(409).json({
+        error: 'Concurrent modification conflict: Booking was already processed by another approver.'
+      });
+    }
+
+    // Persist decision into approvals collection
+    await approvalsCol.updateOne(
+      { booking_id: bookingId },
+      {
+        $set: {
+          decision: 'approved',
+          decision_by: req.approver.username,
+          decision_time: now,
+          ticket_number: ticketNumber,
+          updated_at: now
+        }
+      }
+    );
+
+    res.json({
+      success: true,
+      booking: updatedBooking,
+      message: `Booking ${booking.booking_reference} approved. Issued Ticket ${ticketNumber}.`
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/bookings/:id/reject — Authenticated Station Duty Approver rejection
+router.post('/:id/reject', requireApprover, async (req, res, next) => {
+  try {
+    const bookingId = req.params.id;
+    const { reason } = req.body || {};
+    const bookingsCol = getCollection('bookings');
+    const approvalsCol = getCollection('approvals');
+
+    if (!reason || typeof reason !== 'string' || reason.trim().length === 0) {
+      return res.status(400).json({ error: 'Rejection reason is mandatory.' });
+    }
+
+    const booking = await bookingsCol.findOne({ id: bookingId });
+    if (!booking) {
+      return res.status(404).json({ error: 'Booking not found.' });
+    }
+
+    // Conflict of interest enforcement
+    const isOwnerSession = booking.session_id === req.sessionId;
+    const isOwnerEmail = booking.commuter_email && req.approver && 
+      booking.commuter_email.toLowerCase() === req.approver.username.toLowerCase();
+
+    if (isOwnerSession || isOwnerEmail) {
+      return res.status(403).json({
+        error: 'Conflict of interest: Commuters are strictly prohibited from rejecting their own bookings.'
+      });
+    }
+
+    // State machine guard: Only 'Pending' bookings can be rejected
+    if (booking.status !== 'Pending') {
+      return res.status(409).json({
+        error: `Cannot reject booking in status '${booking.status}'. Only Pending bookings can be rejected.`
+      });
+    }
+
+    const now = new Date().toISOString();
+    const cleanReason = reason.trim();
+
+    // Preserve 4-status baseline: Status becomes 'Cancelled' with distinct rejection metadata
+    // Ensures no ticket number, QR token or boarding privilege is ever created
+    const updatedBooking = await bookingsCol.findOneAndUpdate(
+      { id: bookingId, status: 'Pending' },
+      {
+        $set: {
+          status: 'Cancelled',
+          display_status: 'Rejected',
+          approval_status: 'rejected',
+          rejection_reason: cleanReason,
+          rejected_by: req.approver.username,
+          rejected_at: now,
+          cancellation_reason: `Administrative Rejection: ${cleanReason}`,
+          cancelled_at: now,
+          ticket_number: null,
+          qr_token_hash: null,
+          qr_payload: null,
+          updated_at: now
+        }
+      },
+      { returnDocument: 'after' }
+    );
+
+    if (!updatedBooking) {
+      return res.status(409).json({
+        error: 'Concurrent modification conflict: Booking was already processed by another approver.'
+      });
+    }
+
+    // Update approvals collection
+    await approvalsCol.updateOne(
+      { booking_id: bookingId },
+      {
+        $set: {
+          decision: 'rejected',
+          decision_by: req.approver.username,
+          decision_time: now,
+          rejection_reason: cleanReason,
+          updated_at: now
+        }
+      }
+    );
+
+    res.json({
+      success: true,
+      booking: updatedBooking,
+      message: `Booking ${booking.booking_reference} rejected. Reason: ${cleanReason}. No ticket was issued.`
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/bookings/:id/cancel — Commuter cancellation of active booking
 router.post('/:id/cancel', async (req, res, next) => {
   try {
     const bookingId = req.params.id;
-    const { reason } = req.body;
+    const { reason } = req.body || {};
     const sessionId = req.sessionId;
     const bookingsCol = getCollection('bookings');
 
@@ -173,34 +370,51 @@ router.post('/:id/cancel', async (req, res, next) => {
       return res.status(400).json({ error: 'Booking is already cancelled.' });
     }
 
-    const refundRate = 0.80; // 80% refund standard (MetroRefundCalculator)
-    const refundAmount = +(parseFloat(booking.total_fare) * refundRate).toFixed(2);
     const now = new Date().toISOString();
+    const policyStatus = config.cancellationPolicyStatus || 'UNCONFIGURED';
+    const isPolicyActive = policyStatus === 'ACTIVE';
 
-    await bookingsCol.updateOne(
+    // Safety Gate: System Property x_mtts.cancellation.policy_status
+    // Baseline is UNCONFIGURED: No refund is calculated or represented as authorized
+    // until formal administrative and stakeholder policy activation.
+    let refundRate = 0.0;
+    let refundAmount = 0.00;
+    let refundStatus = 'POLICY_UNCONFIGURED';
+    let policyNotice = 'Cancellation and refund policy is currently UNCONFIGURED and pending formal stakeholder approval. No monetary refund is authorized. Turnstile boarding privileges permanently revoked.';
+
+    if (isPolicyActive) {
+      refundRate = 0.80;
+      refundAmount = +(parseFloat(booking.total_fare) * refundRate).toFixed(2);
+      refundStatus = 'PROCESSED';
+      policyNotice = '80% tariff refund calculated via MetroRefundCalculator. Turnstile boarding privileges revoked.';
+    }
+
+    const updatedBooking = await bookingsCol.findOneAndUpdate(
       { id: bookingId },
       {
         $set: {
           status: 'Cancelled',
+          display_status: 'Cancelled',
           cancellation_reason: reason || 'Commuter schedule change',
           cancelled_at: now,
           refund_amount: refundAmount,
-          refund_status: 'PROCESSED',
+          refund_status: refundStatus,
           updated_at: now
         }
-      }
+      },
+      { returnDocument: 'after' }
     );
-
-    const updatedBooking = await bookingsCol.findOne({ id: bookingId });
 
     res.json({
       success: true,
       booking: updatedBooking,
       refund: {
+        eligible: isPolicyActive,
         originalTotalFare: parseFloat(booking.total_fare),
-        refundRate: 0.80,
+        refundRate,
         refundAmount,
-        policyNotice: '80% tariff refund calculated via simulated MetroRefundCalculator. Boarding privilege revoked.'
+        policyStatus,
+        policyNotice
       }
     });
   } catch (err) {

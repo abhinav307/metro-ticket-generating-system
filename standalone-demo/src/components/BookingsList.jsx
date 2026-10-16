@@ -11,9 +11,9 @@ export default function BookingsList({ bookings, onSelectTicket, onBookingsUpdat
 
   const filteredBookings = bookings.filter((b) => {
     if (filter === 'ALL') return true;
-    if (filter === 'ISSUED') return b.status === 'Ticket Issued';
-    if (filter === 'PENDING') return b.status === 'Pending Approval' || b.status === 'Pending';
-    if (filter === 'CANCELLED') return b.status === 'Cancelled';
+    if (filter === 'ISSUED') return b.status === 'Ticket Issued' || b.status === 'Generated' || b.display_status === 'Ticket Issued';
+    if (filter === 'PENDING') return b.status === 'Pending Approval' || b.status === 'Pending' || b.display_status === 'Pending Approval';
+    if (filter === 'CANCELLED') return b.status === 'Cancelled' || b.approval_status === 'rejected';
     return true;
   });
 
@@ -27,24 +27,32 @@ export default function BookingsList({ bookings, onSelectTicket, onBookingsUpdat
     try {
       const res = await cancelBookingApi(cancelModalBooking.id, cancelReason);
       if (res && res.success) {
-        setCancelSuccessMsg(`Booking cancelled successfully. Refund of $${res.refund.refundAmount.toFixed(2)} processed to original payment method.`);
+        if (res.refund && res.refund.refundAmount > 0) {
+          setCancelSuccessMsg(`Booking cancelled successfully. Refund of $${res.refund.refundAmount.toFixed(2)} processed to original payment method. Turnstile pass revoked.`);
+        } else {
+          setCancelSuccessMsg(`Booking cancelled successfully. Turnstile boarding pass revoked. Note: Cancellation policy remains UNCONFIGURED; no monetary refund is authorized.`);
+        }
         if (onBookingsUpdated) onBookingsUpdated();
         setTimeout(() => {
           setCancelModalBooking(null);
           setCancelSuccessMsg('');
-        }, 1800);
+        }, 2200);
         return;
       }
     } catch (err) {
       console.warn('[MTTS] REST API cancellation failed, applying local fallback:', err.message);
       const res = cancelBooking(cancelModalBooking.id, cancelReason);
       if (res.success) {
-        setCancelSuccessMsg(`Booking cancelled successfully. Refund of $${res.refundAmount.toFixed(2)} processed to original payment method.`);
+        if (res.refundAmount > 0) {
+          setCancelSuccessMsg(`Booking cancelled successfully. Refund of $${res.refundAmount.toFixed(2)} processed to original payment method. Turnstile pass revoked.`);
+        } else {
+          setCancelSuccessMsg(`Booking cancelled successfully. Turnstile boarding pass revoked. Note: Cancellation policy remains UNCONFIGURED; no monetary refund is authorized.`);
+        }
         if (onBookingsUpdated) onBookingsUpdated();
         setTimeout(() => {
           setCancelModalBooking(null);
           setCancelSuccessMsg('');
-        }, 1800);
+        }, 2200);
       }
     }
   };
@@ -69,7 +77,7 @@ export default function BookingsList({ bookings, onSelectTicket, onBookingsUpdat
             { id: 'ALL', label: 'All' },
             { id: 'ISSUED', label: 'Ticket Issued' },
             { id: 'PENDING', label: 'Pending Approval' },
-            { id: 'CANCELLED', label: 'Cancelled' }
+            { id: 'CANCELLED', label: 'Cancelled / Rejected' }
           ].map((tab) => (
             <button
               key={tab.id}
@@ -109,12 +117,16 @@ export default function BookingsList({ bookings, onSelectTicket, onBookingsUpdat
               {filteredBookings.map((b) => (
                 <tr key={b.id}>
                   <td>
-                    <div style={{ fontWeight: 700, color: '#fff' }}>
+                    <div style={{ fontWeight: 700, color: '#fff', fontFamily: 'var(--font-mono)' }}>
                       {b.ticket_number || b.booking_reference}
                     </div>
-                    {b.ticket_number && (
+                    {b.ticket_number ? (
                       <div className="mono-text" style={{ fontSize: '0.72rem', color: '#64748b' }}>
                         Ref: {b.booking_reference}
+                      </div>
+                    ) : (
+                      <div style={{ fontSize: '0.72rem', color: '#fbbf24' }}>
+                        (Awaiting Ticket Allocation)
                       </div>
                     )}
                   </td>
@@ -144,24 +156,34 @@ export default function BookingsList({ bookings, onSelectTicket, onBookingsUpdat
 
                   <td>
                     <span className={`status-badge ${
-                      b.status === 'Ticket Issued' ? 'issued' :
-                      b.status === 'Cancelled' ? 'cancelled' : 'pending'
+                      (b.status === 'Ticket Issued' || b.status === 'Generated' || b.display_status === 'Ticket Issued') ? 'issued' :
+                      (b.status === 'Cancelled' || b.approval_status === 'rejected') ? 'cancelled' : 'pending'
                     }`}>
-                      {b.status === 'Ticket Issued' && <CheckCircle2 size={12} />}
-                      {b.status === 'Pending Approval' && <Clock size={12} />}
-                      {b.status === 'Cancelled' && <XCircle size={12} />}
-                      <span>{b.status}</span>
+                      {(b.status === 'Ticket Issued' || b.status === 'Generated' || b.display_status === 'Ticket Issued') && <CheckCircle2 size={12} />}
+                      {(b.status === 'Pending Approval' || b.status === 'Pending' || b.display_status === 'Pending Approval') && <Clock size={12} />}
+                      {(b.status === 'Cancelled' || b.approval_status === 'rejected') && <XCircle size={12} />}
+                      <span>{b.display_status || (b.status === 'Generated' ? 'Ticket Issued' : b.status)}</span>
                     </span>
+                    {b.rejection_reason && (
+                      <div style={{ fontSize: '0.7rem', color: '#fb7185', marginTop: '2px' }}>
+                        Reason: {b.rejection_reason}
+                      </div>
+                    )}
                     {b.status === 'Cancelled' && b.refund_amount > 0 && (
                       <div style={{ fontSize: '0.7rem', color: '#f87171', marginTop: '2px' }}>
                         Refund: ${b.refund_amount.toFixed(2)}
                       </div>
                     )}
+                    {b.status === 'Cancelled' && (!b.refund_amount || b.refund_amount === 0) && (
+                      <div style={{ fontSize: '0.7rem', color: '#94a3b8', marginTop: '2px' }}>
+                        Refund: None (Policy Unconfigured)
+                      </div>
+                    )}
                   </td>
 
                   <td style={{ textAlign: 'right' }}>
-                    <div style={{ display: 'inline-flex', gap: '8px' }}>
-                      {b.status === 'Ticket Issued' && (
+                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+                      {(b.status === 'Ticket Issued' || b.status === 'Generated' || b.display_status === 'Ticket Issued') && b.ticket_number ? (
                         <button
                           type="button"
                           className="btn btn-secondary btn-sm"
@@ -171,9 +193,13 @@ export default function BookingsList({ bookings, onSelectTicket, onBookingsUpdat
                           <QrCode size={14} />
                           <span>QR Pass</span>
                         </button>
-                      )}
+                      ) : (b.status === 'Pending' || b.status === 'Pending Approval' || b.display_status === 'Pending Approval') ? (
+                        <span style={{ fontSize: '0.74rem', color: '#fbbf24', fontStyle: 'italic', padding: '4px 8px', background: 'rgba(245, 158, 11, 0.1)', borderRadius: '4px', border: '1px solid rgba(245, 158, 11, 0.2)' }}>
+                          Awaiting Approval
+                        </span>
+                      ) : null}
 
-                      {b.status !== 'Cancelled' && (
+                      {b.status !== 'Cancelled' && b.approval_status !== 'rejected' && (
                         <button
                           type="button"
                           className="btn btn-outline-danger btn-sm"
@@ -221,13 +247,13 @@ export default function BookingsList({ bookings, onSelectTicket, onBookingsUpdat
                       <strong>${cancelModalBooking.total_fare?.toFixed(2)}</strong>
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
-                      <span style={{ color: '#94a3b8' }}>Policy Refund Rate:</span>
-                      <strong style={{ color: '#10b981' }}>80% (MetroRefundCalculator)</strong>
+                      <span style={{ color: '#94a3b8' }}>Cancellation Policy:</span>
+                      <strong style={{ color: '#fbbf24' }}>UNCONFIGURED (Pending Approval)</strong>
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid var(--border-color)', paddingTop: '6px' }}>
-                      <span style={{ color: '#bae6fd' }}>Refund Amount:</span>
-                      <strong style={{ color: '#38bdf8', fontSize: '1rem' }}>
-                        ${(cancelModalBooking.total_fare * 0.8).toFixed(2)}
+                      <span style={{ color: '#bae6fd' }}>Authorized Refund:</span>
+                      <strong style={{ color: '#94a3b8', fontSize: '0.95rem' }}>
+                        $0.00 (Revocation Only)
                       </strong>
                     </div>
                   </div>

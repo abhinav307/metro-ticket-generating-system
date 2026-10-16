@@ -7,6 +7,7 @@ import { config } from './config.js';
 import { initDb } from './db/index.js';
 import { seedDatabase } from './db/seed.js';
 import { sessionMiddleware } from './middleware/session.js';
+import { approverAuthMiddleware } from './middleware/auth.js';
 import { errorHandler } from './middleware/errorHandler.js';
 
 import healthRouter from './routes/health.js';
@@ -15,6 +16,7 @@ import routesRouter from './routes/routes.js';
 import fareRouter from './routes/fare.js';
 import bookingsRouter from './routes/bookings.js';
 import scannerRouter from './routes/scanner.js';
+import approvalsRouter from './routes/approvals.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -24,7 +26,7 @@ export const app = express();
 // Security and CORS configuration
 app.use(cors({
   origin: config.corsOrigin,
-  exposedHeaders: ['X-Demo-Session-ID']
+  exposedHeaders: ['X-Demo-Session-ID', 'X-Approver-Token']
 }));
 
 // Body parsing
@@ -33,6 +35,9 @@ app.use(express.json());
 // Demo session isolation middleware
 app.use(sessionMiddleware);
 
+// Approver session authentication middleware
+app.use(approverAuthMiddleware);
+
 // API Route Mounts
 app.use('/api/health', healthRouter);
 app.use('/api/stations', stationsRouter);
@@ -40,6 +45,7 @@ app.use('/api/routes', routesRouter);
 app.use('/api/fare', fareRouter);
 app.use('/api/bookings', bookingsRouter);
 app.use('/api/scanner', scannerRouter);
+app.use('/api/approvals', approvalsRouter);
 
 // Serve frontend static build in production or when dist/ exists
 const distPath = path.join(__dirname, '../dist');

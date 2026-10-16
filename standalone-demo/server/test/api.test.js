@@ -2,6 +2,7 @@ import assert from 'assert';
 import { startServer } from '../index.js';
 import { getCollection, getDbInfo, closeDb, connectDb, sanitizeMongoUri } from '../db/index.js';
 import { config } from '../config.js';
+import { generateApproverToken, verifyApproverToken } from '../middleware/auth.js';
 
 let server = null;
 const TEST_PORT = 5055;
@@ -10,6 +11,7 @@ const BASE_URL = `http://localhost:${TEST_PORT}`;
 // Test session IDs
 const SESSION_A = 'test-session-commuter-alpha';
 const SESSION_B = 'test-session-commuter-beta';
+const SESSION_APPROVER = 'test-session-duty-manager';
 
 let passed = 0;
 let failed = 0;
@@ -26,12 +28,29 @@ async function test(name, fn) {
   }
 }
 
+async function loginApprover() {
+  const res = await fetch(`${BASE_URL}/api/approvals/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      username: config.approverUsername,
+      password: config.approverPassword
+    })
+  });
+  assert.strictEqual(res.status, 200);
+  const data = await res.json();
+  assert.strictEqual(data.success, true);
+  assert.ok(data.token);
+  return data.token;
+}
+
 async function runTests() {
   const isRealAtlas = !!config.mongodbUri;
 
   console.log('\n======================================================');
   console.log(' MTTS Full-Stack Backend Integration Test Suite');
-  console.log(' Scope: x_mtts | Database Driver: Official MongoDB Node.js Driver');
+  console.log(' Scope: x_mtts | Driver: Official MongoDB Node.js Driver');
+  console.log(' Lifecycle: Real Server-Side Booking Approvals & Issuance');
   if (isRealAtlas) {
     console.log(' [MODE] LIVE TESTING: Connected to real MongoDB Atlas cluster');
     console.log(` [URI]  Target database: ${config.mongodbDbName}`);
@@ -96,7 +115,6 @@ async function runTests() {
   // 3. Tariff Calculation Engine
   console.log('\n[Suite 3: Authoritative Tariff Calculation Engine]');
   await test('POST /api/fare/calculate calculates single journey fare with minimum tariff safeguard', async () => {
-    // STN-01 to STN-02: 4.2 km * $2.50 = $10.50 (> $10.00 min)
     const res = await fetch(`${BASE_URL}/api/fare/calculate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -116,7 +134,6 @@ async function runTests() {
   });
 
   await test('POST /api/fare/calculate enforces minimum tariff for short routes ($10.00)', async () => {
-    // Red Line short route: STN-06 to STN-07 (3.5 km * $2.50 = $8.75 < $10.00 min)
     const res = await fetch(`${BASE_URL}/api/fare/calculate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -129,12 +146,11 @@ async function runTests() {
     });
     assert.strictEqual(res.status, 200);
     const data = await res.json();
-    assert.strictEqual(data.unitFare, 10.00); // Minimum fare threshold applied
+    assert.strictEqual(data.unitFare, 10.00);
     assert.strictEqual(data.totalFare, 10.00);
   });
 
   await test('POST /api/fare/calculate applies 20% return discount (1.80 multiplier)', async () => {
-    // STN-01 to STN-05: 14.2 km * $2.50 = $35.50 one-way. Return = $35.50 * 1.8 = $63.90. 2 passengers = $127.80
     const res = await fetch(`${BASE_URL}/api/fare/calculate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -183,13 +199,12 @@ async function runTests() {
     assert.strictEqual(res.status, 400);
   });
 
-  // 4. Booking Creation & Session Isolation
-  console.log('\n[Suite 4: Booking Creation, MongoDB Documents & Session Isolation]');
-  let createdBookingId = null;
-  let createdTicketNumber = null;
-  let createdReference = null;
+  // 4. Booking Submission & Pending Lifecycle Invariant
+  console.log('\n[Suite 4: Booking Submission & Pending State Lifecycle Invariants]');
+  let bookingA_Id = null;
+  let bookingA_Ref = null;
 
-  await test('POST /api/bookings creates booking in MongoDB with HMAC-SHA256 token', async () => {
+  await test('POST /api/bookings creates booking in Pending state WITHOUT ticket number or QR token', async () => {
     const res = await fetch(`${BASE_URL}/api/bookings`, {
       method: 'POST',
       headers: {
@@ -212,96 +227,307 @@ async function runTests() {
     assert.strictEqual(data.success, true);
     assert.ok(data.booking);
     assert.strictEqual(data.booking.commuter_name, 'Jordan Vance');
-    assert.strictEqual(data.booking.status, 'Ticket Issued');
+    assert.strictEqual(data.booking.status, 'Pending');
+    assert.strictEqual(data.booking.display_status, 'Pending Approval');
+    assert.strictEqual(data.booking.approval_status, 'pending');
     assert.strictEqual(data.booking.payment_status, 'PAID');
-    assert.ok(data.booking.qr_token_hash);
-    assert.ok(data.booking.qr_payload.startsWith('MTTS|'));
+    assert.strictEqual(data.booking.ticket_number, null, 'ticket_number MUST be null at submission time');
+    assert.strictEqual(data.booking.qr_token_hash, null, 'qr_token_hash MUST be null at submission time');
+    assert.strictEqual(data.booking.qr_payload, null, 'qr_payload MUST be null at submission time');
     assert.strictEqual(data.booking.session_id, SESSION_A);
 
-    createdBookingId = data.booking.id;
-    createdTicketNumber = data.booking.ticket_number;
-    createdReference = data.booking.booking_reference;
+    bookingA_Id = data.booking.id;
+    bookingA_Ref = data.booking.booking_reference;
+
+    // Verify approval record was created in approvals collection
+    const approvalsCol = getCollection('approvals');
+    const apprDoc = await approvalsCol.findOne({ booking_id: bookingA_Id });
+    assert.ok(apprDoc, 'Approval record must be created in approvals collection');
+    assert.strictEqual(apprDoc.decision, 'pending');
+    assert.strictEqual(apprDoc.booking_reference, bookingA_Ref);
   });
 
   await test('GET /api/bookings enforces session isolation between visitors', async () => {
-    // Session A should see the booking it created
     const resA = await fetch(`${BASE_URL}/api/bookings`, {
       headers: { 'X-Demo-Session-ID': SESSION_A }
     });
     const dataA = await resA.json();
-    const hasMyBooking = dataA.bookings.some(b => b.id === createdBookingId);
+    const hasMyBooking = dataA.bookings.some(b => b.id === bookingA_Id);
     assert.strictEqual(hasMyBooking, true);
 
-    // Session B should NOT see Session A's private booking
     const resB = await fetch(`${BASE_URL}/api/bookings`, {
       headers: { 'X-Demo-Session-ID': SESSION_B }
     });
     const dataB = await resB.json();
-    const hasOtherBooking = dataB.bookings.some(b => b.id === createdBookingId);
+    const hasOtherBooking = dataB.bookings.some(b => b.id === bookingA_Id);
     assert.strictEqual(hasOtherBooking, false);
   });
 
-  // 5. MongoDB Unique Constraints & Schema Integrity Tests
-  console.log('\n[Suite 5: MongoDB Unique Constraints & Index Enforcement]');
-  await test('MongoDB enforces unique constraint on booking_reference (duplicate rejected)', async () => {
-    const bookingsCol = getCollection('bookings');
-    let duplicateRejected = false;
-    try {
-      await bookingsCol.insertOne({
-        id: `bkg-dup-${Date.now()}`,
-        session_id: 'test-collision',
-        booking_reference: createdReference, // duplicate
-        ticket_number: `TKT-NEW-${Date.now()}`,
-        status: 'Ticket Issued'
-      });
-    } catch (err) {
-      if (err.code === 11000 || err.message.includes('duplicate key')) {
-        duplicateRejected = true;
-      }
-    }
-    assert.strictEqual(duplicateRejected, true);
+  // 5. Approver Authentication & Authorization
+  console.log('\n[Suite 5: Approver Authentication & Authorization]');
+  let approverToken = null;
+
+  await test('POST /api/approvals/login rejects invalid credentials with 401', async () => {
+    const res = await fetch(`${BASE_URL}/api/approvals/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        username: 'fake_user',
+        password: 'WrongPassword@123'
+      })
+    });
+    assert.strictEqual(res.status, 401);
   });
 
-  await test('MongoDB enforces unique constraint on ticket_number (duplicate rejected)', async () => {
-    const bookingsCol = getCollection('bookings');
-    let duplicateRejected = false;
-    try {
-      await bookingsCol.insertOne({
-        id: `bkg-dup2-${Date.now()}`,
-        session_id: 'test-collision',
-        booking_reference: `MTTS-NEW-${Date.now()}`,
-        ticket_number: createdTicketNumber, // duplicate
-        status: 'Ticket Issued'
-      });
-    } catch (err) {
-      if (err.code === 11000 || err.message.includes('duplicate key')) {
-        duplicateRejected = true;
-      }
-    }
-    assert.strictEqual(duplicateRejected, true);
+  await test('POST /api/approvals/login authenticates Station Duty Approver and returns signed token', async () => {
+    approverToken = await loginApprover();
+    assert.ok(approverToken);
   });
 
-  await test('MongoDB enforces unique constraint on station code (duplicate rejected)', async () => {
-    const stationsCol = getCollection('stations');
-    let duplicateRejected = false;
-    try {
-      await stationsCol.insertOne({
-        code: 'STN-01', // duplicate
-        name: 'Collision Central',
-        line_name: 'Blue Line',
-        active: true
-      });
-    } catch (err) {
-      if (err.code === 11000 || err.message.includes('duplicate key')) {
-        duplicateRejected = true;
-      }
-    }
-    assert.strictEqual(duplicateRejected, true);
+  await test('GET /api/approvals/pending rejects unauthenticated requests with 401', async () => {
+    const res = await fetch(`${BASE_URL}/api/approvals/pending`);
+    assert.strictEqual(res.status, 401);
   });
 
-  // 6. Turnstile Scanner Hardware Verification & Document Updates
-  console.log('\n[Suite 6: Turnstile Scanner Verification & Atomic Updates]');
-  await test('POST /api/scanner/verify unlocks gate (OPEN) for valid issued ticket and increments scans_count', async () => {
+  await test('GET /api/approvals/pending returns pending bookings for authenticated approver', async () => {
+    const res = await fetch(`${BASE_URL}/api/approvals/pending`, {
+      headers: { 'Authorization': `Bearer ${approverToken}` }
+    });
+    assert.strictEqual(res.status, 200);
+    const data = await res.json();
+    assert.strictEqual(data.success, true);
+    assert.ok(Array.isArray(data.bookings));
+    const pendingItem = data.bookings.find(b => b.id === bookingA_Id);
+    assert.ok(pendingItem, 'Booking A must appear in pending approvals queue');
+  });
+
+  await test('POST /api/approvals/login fails closed (503) when credentials or secrets are unconfigured', async () => {
+    const savedSecret = config.sessionSecret;
+    config.sessionSecret = '';
+    try {
+      const res = await fetch(`${BASE_URL}/api/approvals/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: config.approverUsername || 'station_duty_manager',
+          password: config.approverPassword || 'DutyManager@2026'
+        })
+      });
+      assert.strictEqual(res.status, 503);
+      const data = await res.json();
+      assert.ok(data.error.includes('unconfigured'));
+    } finally {
+      config.sessionSecret = savedSecret;
+    }
+  });
+
+  await test('GET /api/approvals/pending fails closed (503) when SESSION_SECRET is unconfigured', async () => {
+    const savedSecret = config.sessionSecret;
+    config.sessionSecret = '';
+    try {
+      const res = await fetch(`${BASE_URL}/api/approvals/pending`, {
+        headers: { 'Authorization': `Bearer ${approverToken}` }
+      });
+      assert.strictEqual(res.status, 503);
+      const data = await res.json();
+      assert.ok(data.error.includes('unconfigured'));
+    } finally {
+      config.sessionSecret = savedSecret;
+    }
+  });
+
+  // 6. Conflict of Interest Protection
+  console.log('\n[Suite 6: Conflict of Interest Protection]');
+  await test('POST /api/bookings/:id/approve rejects commuter self-approval by session (403 Forbidden)', async () => {
+    // Same session as commuter
+    const res = await fetch(`${BASE_URL}/api/bookings/${bookingA_Id}/approve`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${approverToken}`,
+        'X-Demo-Session-ID': SESSION_A // Commuter's own session!
+      }
+    });
+    assert.strictEqual(res.status, 403);
+    const data = await res.json();
+    assert.ok(data.error.includes('Conflict of interest'));
+  });
+
+  // 7. Authorized Approval & Sequential Ticket Issuance
+  console.log('\n[Suite 7: Authorized Approval & Cryptographic Ticket Issuance]');
+  let issuedTicketNumber = null;
+
+  await test('POST /api/bookings/:id/approve transitions booking to Generated and mints ticket', async () => {
+    // Approver approving from an independent approver session
+    const res = await fetch(`${BASE_URL}/api/bookings/${bookingA_Id}/approve`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${approverToken}`,
+        'X-Demo-Session-ID': SESSION_APPROVER
+      }
+    });
+
+    assert.strictEqual(res.status, 200);
+    const data = await res.json();
+    assert.strictEqual(data.success, true);
+    assert.ok(data.booking);
+    assert.strictEqual(data.booking.status, 'Generated');
+    assert.strictEqual(data.booking.display_status, 'Ticket Issued');
+    assert.strictEqual(data.booking.approval_status, 'approved');
+    assert.strictEqual(data.booking.approved_by, config.approverUsername);
+    assert.ok(data.booking.ticket_number.startsWith('TKT-'));
+    assert.ok(data.booking.qr_token_hash);
+    assert.ok(data.booking.qr_payload.startsWith('MTTS|'));
+
+    issuedTicketNumber = data.booking.ticket_number;
+
+    // Verify approval record updated in approvals collection
+    const approvalsCol = getCollection('approvals');
+    const apprDoc = await approvalsCol.findOne({ booking_id: bookingA_Id });
+    assert.strictEqual(apprDoc.decision, 'approved');
+    assert.strictEqual(apprDoc.ticket_number, issuedTicketNumber);
+    assert.strictEqual(apprDoc.decision_by, config.approverUsername);
+  });
+
+  await test('POST /api/bookings/:id/approve on already approved booking returns 409 Conflict', async () => {
+    const res = await fetch(`${BASE_URL}/api/bookings/${bookingA_Id}/approve`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${approverToken}`,
+        'X-Demo-Session-ID': SESSION_APPROVER
+      }
+    });
+    assert.strictEqual(res.status, 409);
+    const data = await res.json();
+    assert.ok(data.error.includes('Only Pending bookings can be approved'));
+  });
+
+  // 8. Rejection Workflow & Rejection Reason Auditing
+  console.log('\n[Suite 8: Rejection Workflow & Reason Auditing]');
+  let bookingB_Id = null;
+  let bookingB_Ref = null;
+
+  await test('POST /api/bookings creates second booking for rejection testing', async () => {
+    const res = await fetch(`${BASE_URL}/api/bookings`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Demo-Session-ID': SESSION_B
+      },
+      body: JSON.stringify({
+        sourceStationCode: 'STN-02',
+        destinationStationCode: 'STN-04',
+        travelDate: '2026-10-22',
+        ticketTypeCode: 'SINGLE',
+        passengerCount: 1,
+        commuterName: 'Alex Mercer',
+        commuterEmail: 'alex.mercer@transit.demo'
+      })
+    });
+    assert.strictEqual(res.status, 201);
+    const data = await res.json();
+    bookingB_Id = data.booking.id;
+    bookingB_Ref = data.booking.booking_reference;
+  });
+
+  await test('POST /api/bookings/:id/reject without reason returns 400 Bad Request', async () => {
+    const res = await fetch(`${BASE_URL}/api/bookings/${bookingB_Id}/reject`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${approverToken}`,
+        'X-Demo-Session-ID': SESSION_APPROVER
+      },
+      body: JSON.stringify({ reason: '' })
+    });
+    assert.strictEqual(res.status, 400);
+  });
+
+  await test('POST /api/bookings/:id/reject with reason transitions booking to Cancelled without ticket', async () => {
+    const reasonText = 'Train capacity exceeded for selected departure window';
+    const res = await fetch(`${BASE_URL}/api/bookings/${bookingB_Id}/reject`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${approverToken}`,
+        'X-Demo-Session-ID': SESSION_APPROVER
+      },
+      body: JSON.stringify({ reason: reasonText })
+    });
+
+    assert.strictEqual(res.status, 200);
+    const data = await res.json();
+    assert.strictEqual(data.success, true);
+    assert.strictEqual(data.booking.status, 'Cancelled');
+    assert.strictEqual(data.booking.display_status, 'Rejected');
+    assert.strictEqual(data.booking.approval_status, 'rejected');
+    assert.strictEqual(data.booking.rejection_reason, reasonText);
+    assert.strictEqual(data.booking.ticket_number, null, 'Rejected booking must NOT receive a ticket number');
+    assert.strictEqual(data.booking.qr_token_hash, null, 'Rejected booking must NOT receive a QR token');
+
+    // Verify approvals collection records rejection
+    const approvalsCol = getCollection('approvals');
+    const apprDoc = await approvalsCol.findOne({ booking_id: bookingB_Id });
+    assert.strictEqual(apprDoc.decision, 'rejected');
+    assert.strictEqual(apprDoc.rejection_reason, reasonText);
+  });
+
+  // 9. Turnstile Scanner Gate Security Enforcement
+  console.log('\n[Suite 9: Turnstile Scanner Gate Security Enforcement]');
+  await test('POST /api/scanner/verify locks gate (HOLD) for unapproved pending booking (403)', async () => {
+    // Create a fresh pending booking
+    const createRes = await fetch(`${BASE_URL}/api/bookings`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Demo-Session-ID': SESSION_A
+      },
+      body: JSON.stringify({
+        sourceStationCode: 'STN-03',
+        destinationStationCode: 'STN-05',
+        travelDate: '2026-10-25',
+        ticketTypeCode: 'SINGLE',
+        passengerCount: 1,
+        commuterName: 'Unapproved Commuter'
+      })
+    });
+    const createData = await createRes.json();
+    const pendingRef = createData.booking.booking_reference;
+
+    // Scan turnstile using the pending booking reference
+    const scanRes = await fetch(`${BASE_URL}/api/scanner/verify`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ticketNumber: pendingRef,
+        gateId: 'GATE-NORTH-01'
+      })
+    });
+
+    assert.strictEqual(scanRes.status, 403);
+    const scanData = await scanRes.json();
+    assert.strictEqual(scanData.scanEvent.gate_status, 'HOLD');
+    assert.strictEqual(scanData.scanEvent.outcome, 'TICKET_CANCELLED_OR_INVALID');
+    assert.ok(scanData.scanEvent.message.includes('pending approver authorization'));
+  });
+
+  await test('POST /api/scanner/verify locks gate (HOLD) for rejected booking (403)', async () => {
+    const scanRes = await fetch(`${BASE_URL}/api/scanner/verify`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ticketNumber: bookingB_Ref,
+        gateId: 'GATE-NORTH-01'
+      })
+    });
+
+    assert.strictEqual(scanRes.status, 403);
+    const scanData = await scanRes.json();
+    assert.strictEqual(scanData.scanEvent.gate_status, 'HOLD');
+    assert.strictEqual(scanData.scanEvent.outcome, 'TICKET_CANCELLED_OR_INVALID');
+    assert.ok(scanData.scanEvent.message.includes('Cancelled or Rejected'));
+  });
+
+  await test('POST /api/scanner/verify unlocks gate (OPEN) for valid approved ticket and increments scans_count', async () => {
     const res = await fetch(`${BASE_URL}/api/scanner/verify`, {
       method: 'POST',
       headers: {
@@ -309,7 +535,7 @@ async function runTests() {
         'X-Demo-Session-ID': SESSION_A
       },
       body: JSON.stringify({
-        ticketNumber: createdTicketNumber,
+        ticketNumber: issuedTicketNumber,
         gateId: 'GATE-NORTH-01',
         stationCode: 'STN-01'
       })
@@ -321,11 +547,11 @@ async function runTests() {
     assert.strictEqual(data.scanEvent.outcome, 'VALID');
     assert.strictEqual(data.scanEvent.http_code, 200);
     assert.ok(data.matchedBooking);
-    assert.strictEqual(data.matchedBooking.ticket_number, createdTicketNumber);
+    assert.strictEqual(data.matchedBooking.ticket_number, issuedTicketNumber);
 
     // Verify scans_count incremented in MongoDB
     const bookingsCol = getCollection('bookings');
-    const doc = await bookingsCol.findOne({ id: createdBookingId });
+    const doc = await bookingsCol.findOne({ id: bookingA_Id });
     assert.strictEqual(doc.scans_count, 1);
   });
 
@@ -361,10 +587,37 @@ async function runTests() {
     assert.strictEqual(data.scanEvent.outcome, 'UNAUTHORIZED');
   });
 
-  // 7. Cancellation & Tariff Refund Policy
-  console.log('\n[Suite 7: Cancellation, 80% Refund & MongoDB Document Updates]');
-  await test('POST /api/bookings/:id/cancel issues 80% tariff refund and revokes ticket in MongoDB', async () => {
-    const res = await fetch(`${BASE_URL}/api/bookings/${createdBookingId}/cancel`, {
+  // 10. Scanner Audit Privacy
+  console.log('\n[Suite 10: Scanner Audit Privacy & Authorization]');
+  await test('GET /api/scanner/events limits ordinary commuters to own session scan events', async () => {
+    const res = await fetch(`${BASE_URL}/api/scanner/events`, {
+      headers: { 'X-Demo-Session-ID': SESSION_B }
+    });
+    assert.strictEqual(res.status, 200);
+    const data = await res.json();
+    // Session B should not see Session A's scan events
+    const hasSessionAScan = data.events.some(e => e.ticket_number === issuedTicketNumber);
+    assert.strictEqual(hasSessionAScan, false);
+  });
+
+  await test('GET /api/scanner/events grants authenticated approver system-wide audit access', async () => {
+    const res = await fetch(`${BASE_URL}/api/scanner/events`, {
+      headers: {
+        'Authorization': `Bearer ${approverToken}`,
+        'X-Demo-Session-ID': SESSION_APPROVER
+      }
+    });
+    assert.strictEqual(res.status, 200);
+    const data = await res.json();
+    const hasSessionAScan = data.events.some(e => e.ticket_number === issuedTicketNumber);
+    assert.strictEqual(hasSessionAScan, true, 'Approver must have visibility into all turnstile events');
+  });
+
+  // 11. Cancellation & Safety Policy Gate on Approved Ticket
+  console.log('\n[Suite 11: Cancellation Safety Policy Gate & Turnstile Revocation]');
+  await test('POST /api/bookings/:id/cancel revokes ticket with $0.00 refund when policy is UNCONFIGURED', async () => {
+    config.cancellationPolicyStatus = 'UNCONFIGURED';
+    const res = await fetch(`${BASE_URL}/api/bookings/${bookingA_Id}/cancel`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -379,30 +632,18 @@ async function runTests() {
     const data = await res.json();
     assert.strictEqual(data.success, true);
     assert.strictEqual(data.booking.status, 'Cancelled');
-    assert.strictEqual(data.refund.refundRate, 0.80);
-    assert.ok(data.refund.refundAmount > 0);
+    assert.strictEqual(data.refund.eligible, false);
+    assert.strictEqual(data.refund.refundRate, 0.0);
+    assert.strictEqual(data.refund.refundAmount, 0.00);
+    assert.strictEqual(data.refund.policyStatus, 'UNCONFIGURED');
+    assert.ok(data.refund.policyNotice.includes('UNCONFIGURED'));
 
-    // Verify document in MongoDB reflects Cancelled status
+    // Verify document in MongoDB reflects Cancelled status and 0.00 refund
     const bookingsCol = getCollection('bookings');
-    const doc = await bookingsCol.findOne({ id: createdBookingId });
+    const doc = await bookingsCol.findOne({ id: bookingA_Id });
     assert.strictEqual(doc.status, 'Cancelled');
-    assert.strictEqual(doc.refund_status, 'PROCESSED');
-  });
-
-  await test('POST /api/bookings/:id/cancel rejects cancellation from unauthorized session (403)', async () => {
-    // Session B attempts to cancel Session A's booking
-    const res = await fetch(`${BASE_URL}/api/bookings/${createdBookingId}/cancel`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Demo-Session-ID': SESSION_B
-      },
-      body: JSON.stringify({
-        reason: 'Malicious attempt'
-      })
-    });
-
-    assert.strictEqual(res.status, 403);
+    assert.strictEqual(doc.refund_status, 'POLICY_UNCONFIGURED');
+    assert.strictEqual(doc.refund_amount, 0.00);
   });
 
   await test('POST /api/scanner/verify locks gate (HOLD) for cancelled ticket (403)', async () => {
@@ -410,7 +651,7 @@ async function runTests() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        ticketNumber: createdTicketNumber,
+        ticketNumber: issuedTicketNumber,
         gateId: 'GATE-NORTH-01'
       })
     });
@@ -421,26 +662,113 @@ async function runTests() {
     assert.strictEqual(data.scanEvent.outcome, 'TICKET_CANCELLED_OR_INVALID');
   });
 
-  // 8. Audit Logging in MongoDB
-  console.log('\n[Suite 8: Turnstile Audit Event Log Persistence (MongoDB)]');
-  await test('GET /api/scanner/events returns scan audit documents from scan_events collection', async () => {
-    const res = await fetch(`${BASE_URL}/api/scanner/events`);
-    assert.strictEqual(res.status, 200);
-    const data = await res.json();
-    assert.ok(Array.isArray(data.events));
-    assert.ok(data.events.length >= 4);
-    const hasCreatedTicketScan = data.events.some(e => e.ticket_number === createdTicketNumber);
-    assert.strictEqual(hasCreatedTicketScan, true);
+  await test('POST /api/bookings/:id/cancel calculates 80% refund when policy is explicitly ACTIVE', async () => {
+    // Create a temporary booking to test active policy behavior
+    const createRes = await fetch(`${BASE_URL}/api/bookings`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Demo-Session-ID': SESSION_A
+      },
+      body: JSON.stringify({
+        sourceStationCode: 'STN-01',
+        destinationStationCode: 'STN-02',
+        travelDate: '2026-10-28',
+        ticketTypeCode: 'SINGLE',
+        passengerCount: 1,
+        commuterName: 'Active Policy Commuter'
+      })
+    });
+    const createData = await createRes.json();
+    const activeTestBookingId = createData.booking.id;
+
+    config.cancellationPolicyStatus = 'ACTIVE';
+    try {
+      const cancelRes = await fetch(`${BASE_URL}/api/bookings/${activeTestBookingId}/cancel`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Demo-Session-ID': SESSION_A
+        },
+        body: JSON.stringify({ reason: 'Trip deferred' })
+      });
+      assert.strictEqual(cancelRes.status, 200);
+      const cancelData = await cancelRes.json();
+      assert.strictEqual(cancelData.refund.eligible, true);
+      assert.strictEqual(cancelData.refund.refundRate, 0.80);
+      assert.strictEqual(cancelData.refund.refundAmount, 8.4); // 10.50 * 0.80 = 8.40
+      assert.strictEqual(cancelData.booking.refund_status, 'PROCESSED');
+    } finally {
+      config.cancellationPolicyStatus = 'UNCONFIGURED'; // Restore safety baseline!
+    }
   });
 
-  // Teardown
+  // 12. MongoDB Unique Constraints & Schema Integrity Tests
+  console.log('\n[Suite 12: MongoDB Unique Constraints & Index Enforcement]');
+  await test('MongoDB enforces unique constraint on booking_reference (duplicate rejected)', async () => {
+    const bookingsCol = getCollection('bookings');
+    let duplicateRejected = false;
+    try {
+      await bookingsCol.insertOne({
+        id: `bkg-dup-${Date.now()}`,
+        session_id: 'test-collision',
+        booking_reference: bookingA_Ref, // duplicate
+        ticket_number: `TKT-NEW-${Date.now()}`,
+        status: 'Ticket Issued'
+      });
+    } catch (err) {
+      if (err.code === 11000 || err.message.includes('duplicate key')) {
+        duplicateRejected = true;
+      }
+    }
+    assert.strictEqual(duplicateRejected, true);
+  });
+
+  await test('MongoDB enforces sparse unique constraint on ticket_number (duplicate rejected)', async () => {
+    const bookingsCol = getCollection('bookings');
+    let duplicateRejected = false;
+    try {
+      await bookingsCol.insertOne({
+        id: `bkg-dup2-${Date.now()}`,
+        session_id: 'test-collision',
+        booking_reference: `MTTS-NEW-${Date.now()}`,
+        ticket_number: issuedTicketNumber, // duplicate
+        status: 'Ticket Issued'
+      });
+    } catch (err) {
+      if (err.code === 11000 || err.message.includes('duplicate key')) {
+        duplicateRejected = true;
+      }
+    }
+    assert.strictEqual(duplicateRejected, true);
+  });
+
+  await test('MongoDB enforces unique constraint on station code (duplicate rejected)', async () => {
+    const stationsCol = getCollection('stations');
+    let duplicateRejected = false;
+    try {
+      await stationsCol.insertOne({
+        code: 'STN-01', // duplicate
+        name: 'Collision Central',
+        line_name: 'Blue Line',
+        active: true
+      });
+    } catch (err) {
+      if (err.code === 11000 || err.message.includes('duplicate key')) {
+        duplicateRejected = true;
+      }
+    }
+    assert.strictEqual(duplicateRejected, true);
+  });
+
+  // Teardown server
   if (server) {
     server.close();
   }
   await closeDb();
 
-  // 9. Production-Safety & Fail-Closed Invariant Verification
-  console.log('\n[Suite 9: Production-Safety & Fail-Closed Invariants]');
+  // 13. Production-Safety & Fail-Closed Invariant Verification
+  console.log('\n[Suite 13: Production-Safety & Fail-Closed Invariants]');
   
   await test('sanitizeMongoUri() masks plaintext passwords in Atlas connection strings', async () => {
     const rawUri = 'mongodb+srv://admin_user:SuperSecretPassword123@cluster0.abcde.mongodb.net/mtts_transit_db?retryWrites=true';
@@ -497,6 +825,32 @@ async function runTests() {
       thrownMessage.includes('[FATAL] Production MongoDB Atlas connection failure'),
       `Expected fatal message but got: ${thrownMessage}`
     );
+  });
+
+  await test('Production approver auth safety: generateApproverToken() throws when SESSION_SECRET is missing', async () => {
+    const savedSecret = config.sessionSecret;
+    config.sessionSecret = '';
+    let caught = false;
+    try {
+      generateApproverToken('test_user');
+    } catch (e) {
+      caught = true;
+      assert.ok(e.message.includes('SESSION_SECRET is not configured'));
+    } finally {
+      config.sessionSecret = savedSecret;
+    }
+    assert.strictEqual(caught, true);
+  });
+
+  await test('Production approver auth safety: verifyApproverToken() returns null when SESSION_SECRET is missing', async () => {
+    const savedSecret = config.sessionSecret;
+    config.sessionSecret = '';
+    try {
+      const res = verifyApproverToken('mock.header.sig');
+      assert.strictEqual(res, null);
+    } finally {
+      config.sessionSecret = savedSecret;
+    }
   });
 
   console.log('\n======================================================');
